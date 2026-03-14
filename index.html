@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TuinRegister v16 — Tuinbeheer & Inventaris</title>
+<title>TuinRegister v27 — Tuinbeheer & Inventaris</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -103,6 +103,8 @@ const Icons = {
   heart:(p)=><svg {...{width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2",...p}}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>,
   tree:(p)=><svg {...{width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2",...p}}><path d="M12 2L4 10h4v2H6l6 6 6-6h-2v-2h4L12 2z"/><line x1="12" y1="18" x2="12" y2="22"/></svg>,
   pond:(p)=><svg {...{width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2",...p}}><ellipse cx="12" cy="14" rx="9" ry="5"/><path d="M8 14c0-2 1.5-4 4-6 2.5 2 4 4 4 6"/><path d="M6 10c-1.5.5-3 2-3 4"/><path d="M18 10c1.5.5 3 2 3 4"/></svg>,
+  map:(p)=><svg {...{width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2",...p}}><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>,
+  camera2:(p)=><svg {...{width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2",...p}}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>,
   chart:(p)=><svg {...{width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2",...p}}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
   veggie:(p)=><svg {...{width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2",...p}}><path d="M12 2a7 7 0 017 7c0 5-7 13-7 13S5 14 5 9a7 7 0 017-7z"/><path d="M12 9v6"/><path d="M9 12h6"/></svg>,
 };
@@ -875,7 +877,7 @@ Geef JSON (alleen JSON, GEEN markdown backticks):
 {"naam":"Nederlandse naam","latijn":"Latijnse naam","type":"Vaste plant/Tweejarige/Eenjarige/Boom-struik/Struik/siergras/kruid/halfheester/bodembedekker - Vivace=Vaste plant!","licht":"Zon/Zon-Halfzon/Halfzon/Halfzon-Schaduw/Schaduw","hoogte":"cm","breedte":"cm","bloeiStart":"EERSTE maand met ingevuld rondje bloeirij, volledige NL naam","bloeiEind":"LAATSTE maand met ingevuld rondje bloeirij, volledige NL naam","kleur":"bloeikleur","inheems":"Ja/Nee/Nee (wel ingeburgerd)","droogte":"tolerantie","dracht":"bestuivers info - kijk naar mellifère/honingrijk","geur":"Ja/Nee + beschrijving","eetbaar":"Ja/Nee + welk deel","bessen":"Ja/Nee","perM2":"per m2 of Solitair","snoeien":"wanneer en hoe","oogsten":"wanneer"}
 Combineer foto-info MET eigen kennis over de soort.`;
 
-function PlantTab({plants,setPlants,bulbs,setBulbs,tasks,setTasks}){
+function PlantTab({plants,setPlants,bulbs,setBulbs,tasks,setTasks,onAfterAdd}){
   const [search,setSearch]=useState("");
   const [selected,setSelected]=useState(null);
   const [selectedKind,setSelectedKind]=useState(null); // "plant" | "bulb"
@@ -907,8 +909,8 @@ function PlantTab({plants,setPlants,bulbs,setBulbs,tasks,setTasks}){
     else{setBulbs(p=>p.map(x=>x.id===id?{...x,photos:[...(x.photos||[]),d]}:x));}
     if(selected?.id===id) setSelected(p=>({...p,photos:[...(p.photos||[]),d]}));
   }
-  function onAddedPlant(formData,images){const np={id:Date.now(),...formData,photo:images?.[0]||null,photos:images?.slice(1)||[]};setPlants(p=>[...p,np]);setAddKind(null);}
-  function onAddedBulb(formData,images){const nb={id:Date.now(),...formData,photo:images?.[0]||null,photos:images?.slice(1)||[]};setBulbs(p=>[...p,nb]);setAddKind(null);}
+  function onAddedPlant(formData,images){const np={id:Date.now(),...formData,photo:images?.[0]||null,photos:images?.slice(1)||[]};setPlants(p=>[...p,np]);setAddKind(null);onAfterAdd&&onAfterAdd(np);}
+  function onAddedBulb(formData,images){const nb={id:Date.now(),...formData,photo:images?.[0]||null,photos:images?.slice(1)||[]};setBulbs(p=>[...p,nb]);setAddKind(null);onAfterAdd&&onAfterAdd(nb);}
 
   function handleAdd(){setAddKind(null);setShowAdd(true);}
   function doExport(){
@@ -1092,12 +1094,12 @@ Combineer foto-info MET eigen kennis. Geef volledige Nederlandse maandnamen.`;
 
 const SEED_LABELS={soort:"Soort",zaaiStart:"Zaai start",zaaiEind:"Zaai eind",zaaiMethode:"Methode",kiemsoort:"Kiemsoort",kiemtemperatuur:"Kiemtemp.",kiemtijd:"Kiemtijd",zaaidiepte:"Zaaidiepte",zaaiafstand:"Zaaiafstand",standplaats:"Standplaats",grondsoort:"Grond",hoogte:"Hoogte",breedte:"Breedte",verspeenMoment:"Verspenen",uitplantMoment:"Uitplanten",bloeiStart:"Bloei start",bloeiEind:"Bloei eind",kleur:"Kleur",oogstperiode:"Oogst",winterhard:"Winterhard",bijzonderheden:"Bijzonderheden",houdbaarheid:"Houdbaarheid",leverancier:"Leverancier"};
 
-function SeedTab({seeds,setSeeds}){
+function SeedTab({seeds,setSeeds,onAfterAdd}){
   const [search,setSearch]=useState("");
   const [selected,setSelected]=useState(null);
   const [showAdd,setShowAdd]=useState(false);
   const flt=seeds.filter(s=>{const q=search.toLowerCase();return!q||s.naam?.toLowerCase().includes(q)||s.latijn?.toLowerCase().includes(q);});
-  function onAdded(formData,images){setSeeds(p=>[...p,{id:Date.now(),...formData,photo:images?.[0]||null,photos:images?.slice(1)||[]}]);}
+  function onAdded(formData,images){const ns={id:Date.now(),...formData,photo:images?.[0]||null,photos:images?.slice(1)||[]};setSeeds(p=>[...p,ns]);onAfterAdd&&onAfterAdd(ns);}
   function del(id){setSeeds(p=>p.filter(s=>s.id!==id));setSelected(null);}
 
   function exportSeeds(){exportToExcel("Zaden",["Naam","Latijns","Soort","Zaai start","Zaai eind","Methode","Kiemsoort","Kiemtemp.","Kiemtijd","Zaaidiepte","Zaaiafstand","Standplaats","Grond","Hoogte","Breedte","Verspenen","Uitplanten","Bloei start","Bloei eind","Kleur","Oogst","Winterhard","Bijzonderheden","Houdbaarheid","Leverancier"],seeds.map(s=>[s.naam,s.latijn,s.soort,s.zaaiStart,s.zaaiEind,s.zaaiMethode,s.kiemsoort,s.kiemtemperatuur,s.kiemtijd,s.zaaidiepte,s.zaaiafstand,s.standplaats,s.grondsoort,s.hoogte,s.breedte,s.verspeenMoment,s.uitplantMoment,s.bloeiStart,s.bloeiEind,s.kleur,s.oogstperiode,s.winterhard,s.bijzonderheden,s.houdbaarheid,s.leverancier].map(v=>v||"")),"Zaden_inventaris");}
@@ -1130,13 +1132,13 @@ function SeedTab({seeds,setSeeds}){
 // ═══════════════════════════════════════════════════════════════════
 // GENERIC SIMPLE TAB (reusable for Bomen, Vijver, Moestuin)
 // ═══════════════════════════════════════════════════════════════════
-function SimpleInventoryTab({title,icon,accentColor,accentBg,items,setItems,fields,prompt,exportName,exportHeaders,exportRow,emptyIcon,emptyTitle,emptyAdd,addTitle,addDesc,searchPlaceholder}){
+function SimpleInventoryTab({title,icon,accentColor,accentBg,items,setItems,fields,prompt,exportName,exportHeaders,exportRow,emptyIcon,emptyTitle,emptyAdd,addTitle,addDesc,searchPlaceholder,onAfterAdd}){
   const [search,setSearch]=useState("");
   const [selected,setSelected]=useState(null);
   const [showAdd,setShowAdd]=useState(false);
   const flt=items.filter(s=>{const q=search.toLowerCase();return!q||s.naam?.toLowerCase().includes(q)||s.latijn?.toLowerCase().includes(q);});
   function addPhoto(id,d){setItems(p=>p.map(x=>x.id===id?{...x,photos:[...(x.photos||[]),d]}:x));if(selected?.id===id)setSelected(p=>({...p,photos:[...(p.photos||[]),d]}));}
-  function onAdded(formData,images){setItems(p=>[...p,{id:Date.now(),...formData,photo:images?.[0]||null,photos:images?.slice(1)||[]}]);}
+  function onAdded(formData,images){const ni={id:Date.now(),...formData,photo:images?.[0]||null,photos:images?.slice(1)||[]};setItems(p=>[...p,ni]);onAfterAdd&&onAfterAdd(ni);}
   function del(id){setItems(p=>p.filter(s=>s.id!==id));setSelected(null);}
   function doExport(){exportToExcel(exportName,exportHeaders,items.map(exportRow),exportName+"_inventaris");}
 
@@ -1192,8 +1194,8 @@ const TREE_PROMPT=`Analyseer deze foto van een boom of struik. Geef JSON (alleen
 {"naam":"Nederlandse naam","latijn":"Latijnse naam","type":"Boom/Struik/Halfstruik/Klimplant/Conifeer","licht":"Zon/Zon-Halfzon/Halfzon/Schaduw","hoogte":"m","breedte":"m","bloeiStart":"maand","bloeiEind":"maand","kleur":"bloeikleur of siereigenschap","inheems":"Ja/Nee","winterhard":"Ja/Nee/Beperkt","dracht":"bestuivers info","bessen":"vruchten info","snoeien":"wanneer en hoe","bijzonderheden":"extra info"}
 Combineer foto-info MET eigen kennis.`;
 
-function TreeTab({trees,setTrees}){
-  return <SimpleInventoryTab title="Bomen & struiken" icon={Icons.tree} accentColor={K.tree} accentBg={K.treeL} items={trees} setItems={setTrees} fields={TREE_FIELDS} prompt={TREE_PROMPT} exportName="Bomen" exportHeaders={["Naam","Latijns","Type","Lichtstand","Hoogte","Breedte","Bloei start","Bloei eind","Kleur","Inheems","Winterhard","Dracht","Bessen","Snoeien","Bijzonderheden"]} exportRow={t=>[t.naam,t.latijn,t.type,t.licht,t.hoogte,t.breedte,t.bloeiStart,t.bloeiEind,t.kleur,t.inheems,t.winterhard,t.dracht,t.bessen,t.snoeien,t.bijzonderheden].map(v=>v||"")} emptyIcon={<Icons.tree size={32} color={K.tree}/>} emptyTitle="Nog geen bomen of struiken" emptyAdd="Voeg een boom of struik toe om te beginnen." addTitle="Boom/struik toevoegen" addDesc="Scan een label of foto, of voer handmatig in." searchPlaceholder="Zoek bomen & struiken..."/>;
+function TreeTab({trees,setTrees,onAfterAdd}){
+  return <SimpleInventoryTab title="Bomen & struiken" icon={Icons.tree} accentColor={K.tree} accentBg={K.treeL} items={trees} setItems={setTrees} fields={TREE_FIELDS} prompt={TREE_PROMPT} exportName="Bomen" exportHeaders={["Naam","Latijns","Type","Lichtstand","Hoogte","Breedte","Bloei start","Bloei eind","Kleur","Inheems","Winterhard","Dracht","Bessen","Snoeien","Bijzonderheden"]} exportRow={t=>[t.naam,t.latijn,t.type,t.licht,t.hoogte,t.breedte,t.bloeiStart,t.bloeiEind,t.kleur,t.inheems,t.winterhard,t.dracht,t.bessen,t.snoeien,t.bijzonderheden].map(v=>v||"")} emptyIcon={<Icons.tree size={32} color={K.tree}/>} emptyTitle="Nog geen bomen of struiken" emptyAdd="Voeg een boom of struik toe om te beginnen." addTitle="Boom/struik toevoegen" addDesc="Scan een label of foto, of voer handmatig in." searchPlaceholder="Zoek bomen & struiken..." onAfterAdd={onAfterAdd}/>;
 }
 
 // --- VIJVER ---
@@ -1215,8 +1217,8 @@ const POND_PROMPT=`Analyseer deze foto van een vijver- of waterplant. Geef JSON 
 {"naam":"Nederlandse naam","latijn":"Latijnse naam","type":"Oeverplant/Waterplant/Drijfplant/Onderwaterplant/Moerasplant","licht":"Zon/Zon-Halfzon/Halfzon/Schaduw","hoogte":"cm","waterDiepte":"cm of beschrijving","bloeiStart":"maand","bloeiEind":"maand","kleur":"bloeikleur","winterhard":"Ja/Nee/Beperkt","dracht":"bestuivers info","bijzonderheden":"extra info, zuurstofplant etc."}
 Combineer foto-info MET eigen kennis.`;
 
-function PondTab({pondPlants,setPondPlants}){
-  return <SimpleInventoryTab title="Vijver" icon={Icons.pond} accentColor={K.pond} accentBg={K.pondL} items={pondPlants} setItems={setPondPlants} fields={POND_FIELDS} prompt={POND_PROMPT} exportName="Vijver" exportHeaders={["Naam","Latijns","Type","Lichtstand","Hoogte","Waterdiepte","Bloei start","Bloei eind","Kleur","Winterhard","Dracht","Bijzonderheden"]} exportRow={p=>[p.naam,p.latijn,p.type,p.licht,p.hoogte,p.waterDiepte,p.bloeiStart,p.bloeiEind,p.kleur,p.winterhard,p.dracht,p.bijzonderheden].map(v=>v||"")} emptyIcon={<Icons.pond size={32} color={K.pond}/>} emptyTitle="Nog geen vijverplanten" emptyAdd="Voeg een vijver- of waterplant toe." addTitle="Vijverplant toevoegen" addDesc="Scan een label of foto, of voer handmatig in." searchPlaceholder="Zoek vijverplanten..."/>;
+function PondTab({pondPlants,setPondPlants,onAfterAdd}){
+  return <SimpleInventoryTab title="Vijver" icon={Icons.pond} accentColor={K.pond} accentBg={K.pondL} items={pondPlants} setItems={setPondPlants} fields={POND_FIELDS} prompt={POND_PROMPT} exportName="Vijver" exportHeaders={["Naam","Latijns","Type","Lichtstand","Hoogte","Waterdiepte","Bloei start","Bloei eind","Kleur","Winterhard","Dracht","Bijzonderheden"]} exportRow={p=>[p.naam,p.latijn,p.type,p.licht,p.hoogte,p.waterDiepte,p.bloeiStart,p.bloeiEind,p.kleur,p.winterhard,p.dracht,p.bijzonderheden].map(v=>v||"")} emptyIcon={<Icons.pond size={32} color={K.pond}/>} emptyTitle="Nog geen vijverplanten" emptyAdd="Voeg een vijver- of waterplant toe." addTitle="Vijverplant toevoegen" addDesc="Scan een label of foto, of voer handmatig in." searchPlaceholder="Zoek vijverplanten..." onAfterAdd={onAfterAdd}/>;
 }
 
 // --- MOESTUIN ---
@@ -1242,8 +1244,8 @@ const VEGGIE_PROMPT=`Analyseer deze foto van een moestuingewas of -label. Geef J
 {"naam":"Nederlandse naam","latijn":"Latijnse naam","type":"Groente/Fruit/Kruid/Peulvrucht/Knolgewas/Bladgroente/Wortelgroente","licht":"Zon/Zon-Halfzon/Halfzon","hoogte":"cm","zaaiStart":"zaai/plant start maand","zaaiEind":"zaai/plant eind maand","oogstStart":"oogst start maand","oogstEind":"oogst eind maand","rijAfstand":"cm","plantAfstand":"cm","zaaiMethode":"methode","grondsoort":"grondvoorkeur","bemesting":"bemestingstips","combineren":"goede buurplanten","bijzonderheden":"ras info, bewaartips, etc."}
 Combineer foto-info MET eigen kennis.`;
 
-function VeggieTab({veggies,setVeggies}){
-  return <SimpleInventoryTab title="Moestuin" icon={Icons.veggie} accentColor={K.veggie} accentBg={K.veggieL} items={veggies} setItems={setVeggies} fields={VEGGIE_FIELDS} prompt={VEGGIE_PROMPT} exportName="Moestuin" exportHeaders={["Naam","Latijns","Type","Lichtstand","Hoogte","Zaai start","Zaai eind","Oogst start","Oogst eind","Rijafstand","Plantafstand","Zaaimethode","Grondsoort","Bemesting","Buurplanten","Bijzonderheden"]} exportRow={v=>[v.naam,v.latijn,v.type,v.licht,v.hoogte,v.zaaiStart,v.zaaiEind,v.oogstStart,v.oogstEind,v["rij afstand"],v.plantAfstand,v.zaaiMethode,v.grondsoort,v.bemesting,v.combineren,v.bijzonderheden].map(x=>x||"")} emptyIcon={<Icons.veggie size={32} color={K.veggie}/>} emptyTitle="Nog geen moestuinplanten" emptyAdd="Voeg een groente, kruid of fruit toe." addTitle="Moestuinplant toevoegen" addDesc="Scan een zaadzakje of label, of voer handmatig in." searchPlaceholder="Zoek moestuinplanten..."/>;
+function VeggieTab({veggies,setVeggies,onAfterAdd}){
+  return <SimpleInventoryTab title="Moestuin" icon={Icons.veggie} accentColor={K.veggie} accentBg={K.veggieL} items={veggies} setItems={setVeggies} fields={VEGGIE_FIELDS} prompt={VEGGIE_PROMPT} exportName="Moestuin" exportHeaders={["Naam","Latijns","Type","Lichtstand","Hoogte","Zaai start","Zaai eind","Oogst start","Oogst eind","Rijafstand","Plantafstand","Zaaimethode","Grondsoort","Bemesting","Buurplanten","Bijzonderheden"]} exportRow={v=>[v.naam,v.latijn,v.type,v.licht,v.hoogte,v.zaaiStart,v.zaaiEind,v.oogstStart,v.oogstEind,v["rij afstand"],v.plantAfstand,v.zaaiMethode,v.grondsoort,v.bemesting,v.combineren,v.bijzonderheden].map(x=>x||"")} emptyIcon={<Icons.veggie size={32} color={K.veggie}/>} emptyTitle="Nog geen moestuinplanten" emptyAdd="Voeg een groente, kruid of fruit toe." addTitle="Moestuinplant toevoegen" addDesc="Scan een zaadzakje of label, of voer handmatig in." searchPlaceholder="Zoek moestuinplanten..." onAfterAdd={onAfterAdd}/>;
 }
 
 
@@ -1365,6 +1367,160 @@ function WishlistTab({wishlist,setWishlist}){
   </div>);
 }
 
+
+
+// ═══════════════════════════════════════════════════════════════════
+// INVENTARIS TAB — unified view for all 5 inventory categories
+// ═══════════════════════════════════════════════════════════════════
+function InventarisTab({plants,setPlants,bulbs,setBulbs,trees,setTrees,pondPlants,setPondPlants,veggies,setVeggies,seeds,setSeeds,tasks,setTasks,gardenMap,setGardenMap,onNavigatePlattegrond}){
+  const [cat,setCat]=useState("sierplanten");
+  const [pinPrompt,setPinPrompt]=useState(null); // {plant} — ask user to pin after adding
+
+  function handleAfterAdd(plant){
+    // After any inventory add, offer to pin on map
+    if((gardenMap.shapes||[]).length>0){
+      setPinPrompt(plant);
+    }
+  }
+
+  function confirmPin(plant){
+    // Navigate to plattegrond and trigger pin picker
+    setPinPrompt(null);
+    onNavigatePlattegrond&&onNavigatePlattegrond();
+  }
+
+  const CATS=[
+    {id:"sierplanten", label:"🌸 Sierplanten", color:K.accent,   bg:K.accentLight,
+     count:()=>plants.length+bulbs.length},
+    {id:"bomen",       label:"🌳 Bomen",       color:K.tree,     bg:K.treeL,
+     count:()=>trees.length},
+    {id:"vijver",      label:"💧 Vijver",      color:K.pond,     bg:K.pondL,
+     count:()=>pondPlants.length},
+    {id:"moestuin",    label:"🥕 Moestuin",    color:K.veggie,   bg:K.veggieL,
+     count:()=>veggies.length},
+    {id:"zadenbank",   label:"🌱 Zadenbank",   color:K.warm,     bg:K.warmLight,
+     count:()=>seeds.length},
+  ];
+
+  const active=CATS.find(c=>c.id===cat);
+
+  return(
+    <div>
+      {/* Category switcher */}
+      <div style={{marginBottom:16}}>
+        <h2 style={{margin:"0 0 10px",fontSize:22,color:K.text}}>Inventaris</h2>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {CATS.map(c=>(
+            <button key={c.id} onClick={()=>setCat(c.id)} style={{
+              padding:"6px 14px",borderRadius:20,
+              border:`2px solid ${cat===c.id?c.color:K.border}`,
+              background:cat===c.id?c.color:"#FFFFFF",
+              color:cat===c.id?"#fff":K.muted,
+              fontSize:12,fontWeight:700,cursor:"pointer",
+              fontFamily:"inherit",transition:"all .15s",
+              display:"flex",alignItems:"center",gap:5
+            }}>
+              {c.label}
+              <span style={{
+                background:cat===c.id?"rgba(255,255,255,.3)":K.bL,
+                color:cat===c.id?"#fff":K.muted,
+                borderRadius:10,fontSize:10,padding:"0 6px",fontWeight:600
+              }}>{c.count()}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Render the matching sub-tab — each keeps its own state via key */}
+      {cat==="sierplanten" && <PlantTab key="sierplanten"
+        plants={plants} setPlants={setPlants}
+        bulbs={bulbs} setBulbs={setBulbs}
+        tasks={tasks} setTasks={setTasks} onAfterAdd={handleAfterAdd}/>}
+
+      {cat==="bomen" && <TreeTab key="bomen"
+        trees={trees} setTrees={setTrees} onAfterAdd={handleAfterAdd}/>}
+
+      {cat==="vijver" && <PondTab key="vijver"
+        pondPlants={pondPlants} setPondPlants={setPondPlants} onAfterAdd={handleAfterAdd}/>}
+
+      {cat==="moestuin" && <VeggieTab key="moestuin"
+        veggies={veggies} setVeggies={setVeggies} onAfterAdd={handleAfterAdd}/>}
+
+      {cat==="zadenbank" && <SeedTab key="zadenbank"
+        seeds={seeds} setSeeds={setSeeds} onAfterAdd={handleAfterAdd}/>}
+
+      {/* Pin on map modal — mini map shown in detail */}
+      {pinPrompt&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:2000,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"30px 8px"}}>
+        <div style={{background:"#F3EBDD",borderRadius:14,padding:20,maxWidth:620,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div>
+              <h3 style={{margin:0,fontSize:16,color:K.text}}>📍 {pinPrompt.naam} pinnen op plattegrond</h3>
+              <p style={{margin:"3px 0 0",fontSize:12,color:K.muted}}>Klik op een vakje binnen de omtrek om de plant te pinnen.</p>
+            </div>
+            <button onClick={()=>setPinPrompt(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:K.muted,lineHeight:1,padding:4}}>✕</button>
+          </div>
+          {(()=>{
+            const gm=gardenMap;
+            const MCELL=22;
+            const mc=gm.cols||20, mr=gm.rows||16;
+            const moutline=(gm.outline||[]).map(p=>({x:p.x*(MCELL/28),y:p.y*(MCELL/28)}));
+            const moutlinePts=moutline.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+            const mcells=gm.cells||{};
+            const mpins=gm.pins||[];
+            function mCellInOutline(r,c){
+              if(moutline.length<3||!gm.outlineClosed) return true;
+              return pointInPolygon(c*MCELL+MCELL/2,r*MCELL+MCELL/2,moutline);
+            }
+            function mGetZone(r,c){return mcells[`${r}_${c}`]||null;}
+            function mGetPins(r,c){return mpins.filter(p=>p.r===r&&p.c===c);}
+            const pinColor=plantPinColor(pinPrompt.id);
+            const [hov,setHov]=useState(null);
+            return(
+              <div style={{overflowX:"auto",marginBottom:12}}>
+                <svg viewBox={`0 0 ${mc*MCELL} ${mr*MCELL}`} style={{display:"block",width:"100%",minWidth:240,background:"#faf8f4",borderRadius:8,cursor:"cell"}}>
+                  {gm.outlineClosed&&moutline.length>=3&&<polygon points={moutlinePts} fill="rgba(240,236,226,.8)" stroke="#2E5A3D" strokeWidth={1.5} strokeLinejoin="round"/>}
+                  {Array.from({length:mr},(_,r)=>Array.from({length:mc},(_,c)=>{
+                    const inOL=mCellInOutline(r,c);
+                    const zk=mGetZone(r,c);
+                    const zd=zk?ZONE_DEF[zk]:null;
+                    const mps=mGetPins(r,c);
+                    const isHov=hov?.r===r&&hov?.c===c;
+                    return(<g key={`${r}_${c}`}
+                      onMouseEnter={()=>inOL&&setHov({r,c})}
+                      onMouseLeave={()=>setHov(null)}
+                      onClick={()=>{
+                        if(!inOL) return;
+                        setGardenMap(prev=>({...prev,pins:[...(prev.pins||[]),{id:uid(),plantId:pinPrompt.id,naam:pinPrompt.naam,kleur:pinPrompt.kleur,color:pinColor,r,c}]}));
+                        setPinPrompt(null);
+                      }}
+                      style={{cursor:inOL?"cell":"default"}}>
+                      <rect x={c*MCELL} y={r*MCELL} width={MCELL} height={MCELL}
+                        fill={!inOL?"rgba(0,0,0,.05)":zd?zd.fill:"transparent"}
+                        stroke={!inOL?"rgba(0,0,0,.03)":K.border} strokeWidth={.4}/>
+                      {inOL&&isHov&&<rect x={c*MCELL+1} y={r*MCELL+1} width={MCELL-2} height={MCELL-2}
+                        fill={`${pinColor}44`} stroke={pinColor} strokeWidth={1} rx={2}/>}
+                      {mps.map((p,pi)=>(
+                        <circle key={p.id} cx={c*MCELL+(pi%2===0?6:MCELL-6)} cy={r*MCELL+(pi<2?6:MCELL-6)} r={4}
+                          fill={p.color} stroke="#fff" strokeWidth={1}/>
+                      ))}
+                    </g>);
+                  }))}
+                  {/* Grid */}
+                  {Array.from({length:mr+1},(_,r)=><line key={`h${r}`} x1={0} y1={r*MCELL} x2={mc*MCELL} y2={r*MCELL} stroke="#ddd" strokeWidth={.3}/>)}
+                  {Array.from({length:mc+1},(_,c)=><line key={`v${c}`} x1={c*MCELL} y1={0} x2={c*MCELL} y2={mr*MCELL} stroke="#ddd" strokeWidth={.3}/>)}
+                  {gm.outlineClosed&&moutline.length>=3&&<polygon points={moutlinePts} fill="none" stroke="#2E5A3D" strokeWidth={1.5} strokeLinejoin="round"/>}
+                </svg>
+              </div>
+            );
+          })()}
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button onClick={()=>setPinPrompt(null)} style={{padding:"8px 16px",borderRadius:8,border:`1px solid ${K.border}`,background:"#fff",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Overslaan</button>
+          </div>
+        </div>
+      </div>}
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // BLOEIKALENDER TAB — line chart day 1-365, one line per species
@@ -1546,26 +1702,1109 @@ function BloeikalenderTab({plants,bulbs,trees,pondPlants,veggies}){
   </div>);
 }
 
+
+// ═══════════════════════════════════════════════════════════════════
+// PLATTEGROND TAB — phase 1: draw outline | phase 2: fill grid + pins
+// ═══════════════════════════════════════════════════════════════════
+
+function plantPinColor(id){
+  const P=["#E74C3C","#2ECC71","#3498DB","#F39C12","#9B59B6","#1ABC9C","#E67E22",
+           "#E91E63","#00BCD4","#8BC34A","#FF5722","#607D8B","#795548","#FF9800",
+           "#4CAF50","#2196F3","#9C27B0","#009688","#CDDC39","#FF5252"];
+  const n=Math.abs(typeof id==="number"?id:String(id).split("").reduce((a,c)=>a+c.charCodeAt(0),0));
+  return P[n%P.length];
+}
+
+const ZONE_DEF={
+  zon:    {fill:"rgba(255,210,70,.38)", stroke:"#b8900a", label:"☀️ Zon"},
+  halfzon:{fill:"rgba(130,190,100,.38)",stroke:"#4a7020", label:"⛅ Half zon"},
+  schaduw:{fill:"rgba(90,110,155,.38)", stroke:"#304070", label:"🌑 Schaduw"},
+  gazon:  {fill:"rgba(80,155,70,.30)",  stroke:"#2a6a20", label:"🌿 Gazon"},
+  water:  {fill:"rgba(50,130,205,.38)", stroke:"#1a4888", label:"💧 Water"},
+  pad:    {fill:"rgba(175,150,105,.44)",stroke:"#6a4818", label:"🪨 Pad"},
+  terras: {fill:"rgba(185,170,140,.44)",stroke:"#7a6030", label:"🪵 Terras"},
+  bed:    {fill:"rgba(140,90,60,.32)",  stroke:"#6a3818", label:"🌱 Bed"},
+  kas:    {fill:"rgba(200,230,240,.55)",  stroke:"#1a7088", label:"🏡 Kas"},
+};
+
+// Check if grid cell centre is inside a polygon (ray-cast)
+function pointInPolygon(px, py, poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;
+    if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+function PlattegrondTab({gardenMap,setGardenMap,allPlants,onNavigateInventaris}){
+  const CELL = 28;   // px per 0.5 m cell
+  const {cols=20, rows=16} = gardenMap;
+
+  // outline = array of {x,y} in GRID pixel coords (col*CELL, row*CELL)
+  const outline = gardenMap.outline || [];
+  const outlineClosed = gardenMap.outlineClosed || false;
+
+  // phase: "draw" (step 1 – outline) | "edit" (step 2 – zones + pins)
+  const phase = outlineClosed ? (gardenMap.phase||"edit") : "draw";
+
+  // garden size setup — shown when outline is empty and not yet sized
+  const gardenSized = gardenMap.gardenSized || false;
+  const [showSizeSetup, setShowSizeSetup] = useState(!gardenSized);
+  const [sizeSetupForm, setSizeSetupForm] = useState({breedte:"10", hoogte:"8"});
+
+  function applySizeSetup(){
+    const b=Math.max(1,parseFloat(sizeSetupForm.breedte)||10);
+    const h=Math.max(1,parseFloat(sizeSetupForm.hoogte)||8);
+    // +4 m padding on each side = +8 m = +16 cells per axis
+    const newCols=Math.round(b/0.5)+16;
+    const newRows=Math.round(h/0.5)+16;
+    setGardenMap(prev=>({...prev,cols:newCols,rows:newRows,gardenSized:true,
+      gardenBreedte:b,gardenHoogte:h}));
+    setShowSizeSetup(false);
+  }
+
+  // draw-phase state
+  const [cursorPos, setCursorPos] = useState(null);  // mouse pos during drawing
+  const [snapPt,    setSnapPt]    = useState(null);   // snapped grid intersection
+
+  // edit-phase state
+  const [tool,      setTool]      = useState("zon");
+  const [painting,  setPainting]  = useState(false);
+  const [showPinPicker, setShowPinPicker] = useState(false);
+  const [pendingCell,   setPendingCell]   = useState(null);
+  const [pinSearch,     setPinSearch]     = useState("");
+  const [hoveredPin,    setHoveredPin]    = useState(null);
+  const [hoveredCell,   setHoveredCell]   = useState(null);
+  const [showSizeModal, setShowSizeModal] = useState(false);
+  const [sizeForm,      setSizeForm]      = useState({cols, rows});
+  const [selectedCell, setSelectedCell] = useState(null); // {r,c} for mouse inspect
+  const [showCellInfo, setShowCellInfo] = useState(false);
+  const svgRef = useRef();
+
+  const cells = gardenMap.cells || {};
+  const pins  = gardenMap.pins  || [];
+
+  // ── helpers ──────────────────────────────────────────────────────
+  function ck(r,c){ return `${r}_${c}`; }
+  function getZone(r,c){ return cells[ck(r,c)]||null; }
+  function getPin(r,c){ return pins.find(p=>p.r===r&&p.c===c)||null; }
+  function getPinsAt(r,c){ return pins.filter(p=>p.r===r&&p.c===c); }
+
+  // SVG coords from mouse event
+  function svgPos(e){
+    const svg=svgRef.current;
+    if(!svg) return {x:0,y:0};
+    const rect=svg.getBoundingClientRect();
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    return{
+      x:((cx-rect.left)/rect.width)*(cols*CELL),
+      y:((cy-rect.top)/rect.height)*(rows*CELL),
+    };
+  }
+
+  // Snap raw SVG pos to nearest grid intersection (multiples of CELL)
+  function snapToGrid(x,y){
+    return{
+      x:Math.round(x/CELL)*CELL,
+      y:Math.round(y/CELL)*CELL,
+    };
+  }
+
+  // Is a cell inside the outline polygon?
+  function cellInOutline(r,c){
+    if(outline.length<3||!outlineClosed) return true; // no outline = allow all
+    const cx=c*CELL+CELL/2, cy=r*CELL+CELL/2;
+    return pointInPolygon(cx,cy,outline);
+  }
+
+  // ── PHASE 1: outline drawing ──────────────────────────────────────
+  function handleOutlineMouseMove(e){
+    const pos=svgPos(e);
+    setCursorPos(pos);
+    setSnapPt(snapToGrid(pos.x,pos.y));
+  }
+
+  function handleOutlineClick(e){
+    if(!snapPt) return;
+    // Check if clicking near first point to close
+    if(outline.length>=3){
+      const first=outline[0];
+      const dist=Math.hypot(snapPt.x-first.x,snapPt.y-first.y);
+      if(dist<=CELL*1.2){
+        // Close the outline
+        setGardenMap(prev=>({...prev,outlineClosed:true,phase:"edit"}));
+        return;
+      }
+    }
+    setGardenMap(prev=>({...prev,outline:[...prev.outline||[],snapPt]}));
+  }
+
+  function undoLastPoint(){
+    setGardenMap(prev=>({...prev,outline:(prev.outline||[]).slice(0,-1)}));
+  }
+
+  function resetOutline(){
+    setGardenMap(prev=>({...prev,outline:[],outlineClosed:false,phase:"draw",cells:{},pins:[]}));
+  }
+
+  function closeOutline(){
+    if((gardenMap.outline||[]).length>=3){
+      setGardenMap(prev=>({...prev,outlineClosed:true,phase:"edit"}));
+    }
+  }
+
+  // ── PHASE 2: zone painting + pins ────────────────────────────────
+  function paintCell(r,c){
+    if(r<0||r>=rows||c<0||c>=cols) return;
+    if(!cellInOutline(r,c)) return;   // outside outline = no paint
+    setGardenMap(prev=>{
+      const nc={...(prev.cells||{})};
+      if(tool==="eraser"){ delete nc[ck(r,c)]; }
+      else { nc[ck(r,c)]=tool; }
+      const np=tool==="eraser"?(prev.pins||[]).filter(p=>!(p.r===r&&p.c===c)):(prev.pins||[]);
+      return {...prev,cells:nc,pins:np};
+    });
+  }
+
+  function clickCell(r,c){
+    if(!cellInOutline(r,c)) return;
+    if(tool==="muis"){
+      setSelectedCell({r,c});
+      setShowCellInfo(true);
+      return;
+    }
+    if(tool==="pin"){
+      // Multiple pins per cell: always open picker (no auto-remove)
+      setPendingCell({r,c});
+      setShowPinPicker(true);
+      setPinSearch("");
+    }
+  }
+
+  function placePin(plant){
+    if(!pendingCell) return;
+    const {r,c}=pendingCell;
+    const color=plantPinColor(plant.id);
+    setGardenMap(prev=>({...prev,
+      pins:[...(prev.pins||[]),{id:uid(),plantId:plant.id,naam:plant.naam,kleur:plant.kleur,color,r,c}]
+    }));
+    setShowPinPicker(false);
+    setPendingCell(null);
+  }
+
+  function resizeGrid(){
+    const nc=parseInt(sizeForm.cols)||20;
+    const nr=parseInt(sizeForm.rows)||16;
+    setGardenMap(prev=>{
+      const cleanCells={};
+      Object.entries(prev.cells||{}).forEach(([k,v])=>{
+        const [r,c]=k.split("_").map(Number);
+        if(r<nr&&c<nc) cleanCells[k]=v;
+      });
+      return{...prev,cols:nc,rows:nr,cells:cleanCells,pins:(prev.pins||[]).filter(p=>p.r<nr&&p.c<nc)};
+    });
+    setShowSizeModal(false);
+  }
+
+  function clearAll(){
+    if(!window.confirm("Weet je zeker dat je de hele plattegrond wilt wissen?")) return;
+    setGardenMap(prev=>({...prev,outline:[],outlineClosed:false,phase:"draw",cells:{},pins:[],gardenSized:false,gardenBreedte:null,gardenHoogte:null}));
+    setShowSizeSetup(true);
+  }
+
+  // ── derived ──────────────────────────────────────────────────────
+  const paintedCount=Object.keys(cells).length;
+  const totalM2=(paintedCount*.25).toFixed(2);
+  const outlinePts = outline.map(p=>`${p.x},${p.y}`).join(" ");
+  const pinnedSpecies=[...new Map(pins.map(p=>[p.plantId,p])).values()];
+  const filteredPlants=allPlants.filter(p=>{
+    const q=pinSearch.toLowerCase();
+    return !q||p.naam?.toLowerCase().includes(q)||p.latijn?.toLowerCase().includes(q);
+  });
+
+  // ── RENDER ───────────────────────────────────────────────────────
+  return(<div>
+
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+      <div>
+        <h2 style={{margin:0,fontSize:22,color:K.text}}>Tuinplattegrond</h2>
+        <p style={{margin:"4px 0 0",fontSize:13,color:K.muted}}>
+          {!outlineClosed
+            ? `Stap 1 van 2 — omtrek intekenen · ${outline.length} punt${outline.length!==1?"en":""} geplaatst`
+            : `Stap 2 van 2 — ${cols}×${rows} raster · ${paintedCount} vakken · ${totalM2} m² · ${pins.length} pin${pins.length!==1?"s":""}`
+          }
+        </p>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
+        {!outlineClosed&&<Button small variant="secondary" onClick={()=>setShowSizeSetup(true)}>📐 Afmeting</Button>}
+        {outlineClosed&&<Button small variant="secondary" onClick={()=>{setSizeForm({cols,rows});setShowSizeModal(true);}}>⚙ Grootte</Button>}
+        {(outline.length>0||paintedCount>0)&&<Button small variant="danger" onClick={clearAll}>🗑 Wissen</Button>}
+      </div>
+    </div>
+
+    {/* ── SIZE SETUP MODAL ── */}
+    {showSizeSetup&&!gardenSized&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"#F3EBDD",borderRadius:14,padding:24,maxWidth:420,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
+        <div style={{fontSize:28,marginBottom:8}}>📐</div>
+        <h3 style={{margin:"0 0 6px",fontSize:18,color:K.text}}>Hoe groot is je tuin?</h3>
+        <p style={{fontSize:13,color:K.muted,margin:"0 0 18px",lineHeight:1.6}}>
+          Vul de maximale afmetingen in. Het tekenraster wordt hierop afgestemd — je krijgt <strong>2 meter</strong> extra ruimte aan elke kant.
+        </p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+          <div>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:K.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Breedte (m)</label>
+            <input type="number" min="1" max="200" step="0.5" value={sizeSetupForm.breedte}
+              onChange={e=>setSizeSetupForm(p=>({...p,breedte:e.target.value}))}
+              style={{width:"100%",padding:"10px 12px",border:`2px solid ${K.border}`,borderRadius:8,
+                fontSize:18,fontFamily:"inherit",boxSizing:"border-box",outline:"none",textAlign:"center",fontWeight:700}}/>
+            <div style={{fontSize:10,color:K.muted,marginTop:3,textAlign:"center"}}>{Math.round((parseFloat(sizeSetupForm.breedte)||0)/0.5)+16} kolommen</div>
+          </div>
+          <div>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:K.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Hoogte (m)</label>
+            <input type="number" min="1" max="200" step="0.5" value={sizeSetupForm.hoogte}
+              onChange={e=>setSizeSetupForm(p=>({...p,hoogte:e.target.value}))}
+              style={{width:"100%",padding:"10px 12px",border:`2px solid ${K.border}`,borderRadius:8,
+                fontSize:18,fontFamily:"inherit",boxSizing:"border-box",outline:"none",textAlign:"center",fontWeight:700}}/>
+            <div style={{fontSize:10,color:K.muted,marginTop:3,textAlign:"center"}}>{Math.round((parseFloat(sizeSetupForm.hoogte)||0)/0.5)+16} rijen</div>
+          </div>
+        </div>
+        <div style={{padding:"10px 14px",borderRadius:8,background:"#E8F5E8",border:`1px solid ${K.accent}`,fontSize:12,color:K.accent,marginBottom:16}}>
+          📐 Raster wordt <strong>{(Math.round((parseFloat(sizeSetupForm.breedte)||0)/0.5)+16)*0.5}m × {(Math.round((parseFloat(sizeSetupForm.hoogte)||0)/0.5)+16)*0.5}m</strong> — je tuin heeft 2m speling aan alle kanten.
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setShowSizeSetup(false)} style={{flex:1,padding:"10px",borderRadius:8,border:`1px solid ${K.border}`,background:"#fff",fontSize:13,cursor:"pointer",fontFamily:"inherit",color:K.muted}}>Overslaan</button>
+          <button onClick={applySizeSetup} style={{flex:2,padding:"10px",borderRadius:8,border:"none",background:K.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✅ Raster aanmaken</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── PHASE 1: Draw outline ── */}
+    {!outlineClosed&&<>
+      <Card style={{marginBottom:10,padding:"10px 14px",background:"#FFF8E8",borderLeft:`3px solid #C4703A`}}>
+        <div style={{fontSize:13,fontWeight:700,color:"#C4703A",marginBottom:4}}>✏️ Stap 1 — Tuin omtrek intekenen</div>
+        <div style={{fontSize:12,color:K.muted,lineHeight:1.6}}>
+          Klik op de rastersnijpunten om punten te plaatsen.<br/>
+          De punten worden automatisch verbonden. <strong>Sluit de omtrek</strong> door op het eerste punt te klikken (groene cirkel) of gebruik de knop hieronder.
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+          {outline.length>=3&&<button onClick={closeOutline} style={{padding:"6px 14px",borderRadius:8,border:"none",background:K.accent,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>✅ Omtrek sluiten</button>}
+          {outline.length>0&&<button onClick={undoLastPoint} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${K.border}`,background:"#fff",fontSize:12,cursor:"pointer",color:K.muted}}>↩ Ongedaan</button>}
+          {outline.length>0&&<button onClick={resetOutline} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${K.border}`,background:"#fff",fontSize:12,cursor:"pointer",color:K.danger}}>🗑 Opnieuw</button>}
+        </div>
+      </Card>
+
+      {/* Outline SVG */}
+      <Card style={{padding:0,overflow:"hidden"}}>
+        {/* Scrollable SVG */}
+        <div style={{overflowX:"auto"}}>
+        <svg ref={svgRef}
+          viewBox={`0 0 ${cols*CELL} ${rows*CELL}`}
+          style={{display:"block",width:"100%",minWidth:Math.min(cols*CELL,600),cursor:"crosshair",background:"#faf8f4"}}
+          onMouseMove={handleOutlineMouseMove}
+          onMouseLeave={()=>{setCursorPos(null);setSnapPt(null);}}
+          onClick={handleOutlineClick}
+          onTouchStart={e=>{e.preventDefault();const pos=svgPos(e);setSnapPt(snapToGrid(pos.x,pos.y));}}
+          onTouchEnd={e=>{e.preventDefault();if(snapPt)handleOutlineClick({touches:[{clientX:snapPt.x,clientY:snapPt.y}]});}}
+        >
+          {/* Grid dots at intersections */}
+          {Array.from({length:rows+1},(_,r)=>Array.from({length:cols+1},(_,c)=>(
+            <circle key={`d${r}_${c}`} cx={c*CELL} cy={r*CELL} r={1.5}
+              fill={snapPt&&snapPt.x===c*CELL&&snapPt.y===r*CELL?"#2E5A3D":"#c8bfb0"}/>
+          )))}
+          {/* Grid lines */}
+          {Array.from({length:rows+1},(_,r)=>(
+            <line key={`h${r}`} x1={0} y1={r*CELL} x2={cols*CELL} y2={r*CELL} stroke="#e5dfd6" strokeWidth={.5}/>
+          ))}
+          {Array.from({length:cols+1},(_,c)=>(
+            <line key={`v${c}`} x1={c*CELL} y1={0} x2={c*CELL} y2={rows*CELL} stroke="#e5dfd6" strokeWidth={.5}/>
+          ))}
+          {/* Metre labels */}
+          {Array.from({length:Math.floor(cols/2)+1},(_,i)=>(
+            <text key={`m${i}`} x={i*2*CELL} y={rows*CELL+10} fontSize={8} fill="#aaa" textAnchor="middle">{i}m</text>
+          ))}
+          {Array.from({length:Math.floor(rows/2)+1},(_,i)=>(
+            <text key={`mr${i}`} x={-4} y={i*2*CELL+3} fontSize={8} fill="#aaa" textAnchor="end">{i}m</text>
+          ))}
+
+          {/* Drawn outline segments */}
+          {outline.length>1&&<polyline points={outlinePts} fill="none" stroke="#2E5A3D" strokeWidth={2} strokeLinejoin="round"/>}
+          {/* Preview segment to cursor + distance label */}
+          {outline.length>0&&snapPt&&!outlineClosed&&(()=>{
+            const last=outline[outline.length-1];
+            const dx=(snapPt.x-last.x)/CELL*0.5; // metres
+            const dy=(snapPt.y-last.y)/CELL*0.5;
+            const distM=Math.sqrt(dx*dx+dy*dy);
+            const mx=(last.x+snapPt.x)/2;
+            const my=(last.y+snapPt.y)/2;
+            // Perpendicular offset for label (avoid overlapping the line)
+            const len=Math.hypot(snapPt.x-last.x,snapPt.y-last.y)||1;
+            const nx=-(snapPt.y-last.y)/len*10;
+            const ny= (snapPt.x-last.x)/len*10;
+            const lx=mx+nx, ly=my+ny;
+            const label=distM<0.05?"":""+distM.toFixed(1)+"m";
+            return(<g>
+              <line x1={last.x} y1={last.y} x2={snapPt.x} y2={snapPt.y}
+                stroke="#2E5A3D" strokeWidth={1.5} strokeDasharray="5 4" opacity={.7}/>
+              {label&&<>
+                <rect x={lx-14} y={ly-8} width={28} height={14} rx={4}
+                  fill="#1F3A2A" opacity={.82}/>
+                <text x={lx} y={ly+4} textAnchor="middle" fontSize={9}
+                  fill="#F3EBDD" fontWeight="700" fontFamily="-apple-system,sans-serif">
+                  {label}
+                </text>
+              </>}
+            </g>);
+          })()}
+          {/* Closing preview to first point + distance */}
+          {outline.length>=2&&snapPt&&(()=>{
+            const first=outline[0];
+            const distPx=Math.hypot(snapPt.x-first.x,snapPt.y-first.y);
+            if(distPx<=CELL*1.2){
+              const last=outline[outline.length-1];
+              const dx=(first.x-last.x)/CELL*0.5;
+              const dy=(first.y-last.y)/CELL*0.5;
+              const distM=Math.sqrt(dx*dx+dy*dy);
+              const mx=(last.x+first.x)/2, my=(last.y+first.y)/2;
+              const len=Math.hypot(first.x-last.x,first.y-last.y)||1;
+              const nx=-(first.y-last.y)/len*10, ny=(first.x-last.x)/len*10;
+              const label=distM<0.05?"":distM.toFixed(1)+"m";
+              return(<g>
+                <line x1={last.x} y1={last.y} x2={first.x} y2={first.y}
+                  stroke="#2E5A3D" strokeWidth={1.5} strokeDasharray="5 4" opacity={.8}/>
+                {label&&<>
+                  <rect x={mx+nx-14} y={my+ny-8} width={28} height={14} rx={4} fill="#1F3A2A" opacity={.82}/>
+                  <text x={mx+nx} y={my+ny+4} textAnchor="middle" fontSize={9}
+                    fill="#F3EBDD" fontWeight="700" fontFamily="-apple-system,sans-serif">{label}</text>
+                </>}
+              </g>);
+            }
+            return null;
+          })()}
+
+          {/* Placed points */}
+          {outline.map((pt,i)=>{
+            const isFirst=i===0;
+            const isNearSnap=isFirst&&snapPt&&Math.hypot(snapPt.x-pt.x,snapPt.y-pt.y)<=CELL*1.2;
+            return(<g key={i}>
+              <circle cx={pt.x} cy={pt.y} r={isFirst?8:5}
+                fill={isFirst?"#2E5A3D":"#5b7c4f"} stroke="#fff" strokeWidth={1.5}
+                opacity={isNearSnap?1:.85}/>
+              {isFirst&&<text x={pt.x} y={pt.y+4} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold">1</text>}
+              {isFirst&&isNearSnap&&<circle cx={pt.x} cy={pt.y} r={12} fill="none" stroke="#2E5A3D" strokeWidth={1.5} strokeDasharray="4 3" opacity={.7}/>}
+              {!isFirst&&<text x={pt.x+7} y={pt.y-5} fontSize={8} fill="#5b7c4f" fontWeight="600">{i+1}</text>}
+            </g>);
+          })}
+
+          {/* Snap highlight */}
+          {snapPt&&!outline.some(p=>p.x===snapPt.x&&p.y===snapPt.y)&&(
+            <circle cx={snapPt.x} cy={snapPt.y} r={5} fill="none" stroke="#2E5A3D" strokeWidth={2}/>
+          )}
+
+          {/* Tuin zone highlight — dashed rect showing the actual garden area (without padding) */}
+          {gardenMap.gardenBreedte&&gardenMap.gardenHoogte&&outline.length===0&&(()=>{
+            const padCells=4; // 2m ÷ 0.5m = 4 cells
+            const tw=Math.round(gardenMap.gardenBreedte/0.5);
+            const th=Math.round(gardenMap.gardenHoogte/0.5);
+            const x=padCells*CELL, y=padCells*CELL;
+            const w=tw*CELL, h=th*CELL;
+            return(<g>
+              <rect x={x} y={y} width={w} height={h}
+                fill="rgba(46,90,61,.06)" stroke="#2E5A3D" strokeWidth={1.5}
+                strokeDasharray="8 4" rx={4}/>
+              <text x={x+w/2} y={y+h/2-8} textAnchor="middle" fontSize={11}
+                fill="#2E5A3D" fontWeight="700" fontFamily="-apple-system,sans-serif" opacity={.7}>
+                {gardenMap.gardenBreedte}m × {gardenMap.gardenHoogte}m
+              </text>
+              <text x={x+w/2} y={y+h/2+8} textAnchor="middle" fontSize={9}
+                fill="#2E5A3D" fontFamily="-apple-system,sans-serif" opacity={.5}>
+                Teken je omtrek binnen dit vlak
+              </text>
+            </g>);
+          })()}
+          {/* Hint when no size set */}
+          {outline.length===0&&!gardenMap.gardenBreedte&&(
+            <text x={(cols*CELL)/2} y={(rows*CELL)/2} textAnchor="middle" fontSize={13}
+              fill="#c0b8a8" fontFamily="-apple-system,sans-serif">
+              Klik op een snijpunt om te beginnen
+            </text>
+          )}
+          {outline.length===0&&gardenMap.gardenBreedte&&(
+            <text x={(cols*CELL)/2} y={(rows*CELL)/2+28} textAnchor="middle" fontSize={11}
+              fill="#c0b8a8" fontFamily="-apple-system,sans-serif">
+              Klik op een snijpunt om te beginnen
+            </text>
+          )}
+        </svg>
+        </div>{/* end scroll div */}
+      </Card>
+    </>}
+
+    {/* ── PHASE 2: Grid edit ── */}
+    {outlineClosed&&<>
+      {/* Step 2 banner with back button */}
+      <Card style={{marginBottom:10,padding:"8px 14px",background:"#E8F5E8",borderLeft:`3px solid ${K.accent}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:K.accent}}>✅ Stap 2 — Zones en planten intekenen</div>
+          <div style={{fontSize:11,color:K.muted,marginTop:2}}>Omtrek opgeslagen. Kleur vakken in en voeg pins toe. Alleen vakken binnen de omtrek zijn bewerkbaar.</div>
+        </div>
+        <button onClick={()=>setGardenMap(prev=>({...prev,outlineClosed:false,phase:"draw"}))}
+          style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${K.border}`,background:"#fff",
+            fontSize:11,cursor:"pointer",color:K.muted,whiteSpace:"nowrap",marginLeft:10}}>
+          ✏️ Omtrek aanpassen
+        </button>
+      </Card>
+
+      {/* Tool palette */}
+      <Card style={{padding:"10px 12px",marginBottom:10}}>
+        <div style={{fontSize:11,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Gereedschap</div>
+        {/* Zone tools */}
+        <div style={{marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Zones intekenen</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {Object.entries(ZONE_DEF).map(([k,v])=>(
+              <button key={k} onClick={()=>setTool(k)} style={{
+                padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:600,cursor:"pointer",
+                border:`2px solid ${tool===k?v.stroke:K.border}`,
+                background:tool===k?v.stroke:"#fff",color:tool===k?"#fff":K.text,transition:"all .15s"}}>
+                {v.label}
+              </button>
+            ))}
+            <button onClick={()=>setTool("eraser")} style={{
+              padding:"5px 11px",borderRadius:16,fontSize:11,fontWeight:600,cursor:"pointer",
+              border:`2px solid ${tool==="eraser"?K.danger:K.border}`,
+              background:tool==="eraser"?K.danger:"#fff",color:tool==="eraser"?"#fff":K.text,transition:"all .15s"}}>
+              🧹 Wissen
+            </button>
+          </div>
+        </div>
+        {/* Divider */}
+        <div style={{height:1,background:K.border,margin:"8px 0"}}/>
+        {/* Pin + Mouse tools — distinct section */}
+        <div>
+          <div style={{fontSize:10,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Planten & inspectie</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <button onClick={()=>setTool("pin")} style={{
+              padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
+              border:`2px solid ${tool==="pin"?K.accent:K.border}`,
+              background:tool==="pin"?K.accent:"#fff",color:tool==="pin"?"#fff":K.text,
+              transition:"all .15s",boxShadow:tool==="pin"?"0 2px 8px rgba(46,90,61,.3)":"none"}}>
+              📍 Plant pinnen
+            </button>
+            <button onClick={()=>setTool("muis")} style={{
+              padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
+              border:`2px solid ${tool==="muis"?"#5A3A8A":K.border}`,
+              background:tool==="muis"?"#5A3A8A":"#fff",color:tool==="muis"?"#fff":K.text,
+              transition:"all .15s",boxShadow:tool==="muis"?"0 2px 8px rgba(90,58,138,.3)":"none"}}>
+              🖱️ Inspecteer cel
+            </button>
+          </div>
+        </div>
+        <div style={{marginTop:6,fontSize:11,color:K.muted}}>
+          {tool==="pin"?"Klik op een vakje om een plant te pinnen. Je kunt meerdere planten per cel pinnen."
+            :tool==="muis"?"Klik op een cel om te zien wat er staat (zone, planten)."
+            :tool==="eraser"?"Klik en sleep om vakken + pins te wissen."
+            :`Klik en sleep om vakken in te kleuren als ${ZONE_DEF[tool]?.label||tool}.`}
+        </div>
+      </Card>
+
+      {/* Grid SVG */}
+      <Card style={{padding:0,overflow:"hidden"}}>
+        {/* Scrollable grid */}
+        <div style={{overflowX:"auto"}}>
+        <div style={{display:"inline-block",userSelect:"none"}}>
+          <svg ref={svgRef}
+            viewBox={`-16 0 ${cols*CELL+20} ${rows*CELL+14}`}
+            style={{display:"block",width:"100%",minWidth:Math.min(cols*CELL,600),background:"#faf8f4",
+              cursor:tool==="pin"?"cell":tool==="muis"?"default":"crosshair"}}
+            onMouseDown={e=>{
+              if(tool==="pin"||tool==="muis") return;
+              e.preventDefault();
+              setPainting(true);
+              // paint starting cell
+              const svg=svgRef.current;
+              if(!svg) return;
+              const rect=svg.getBoundingClientRect();
+              const vbW=cols*CELL+36, vbH=rows*CELL+14; // matches viewBox width/height
+              const svgX=((e.clientX-rect.left)/rect.width)*vbW - 16; // -16 for viewBox offset
+              const svgY=((e.clientY-rect.top)/rect.height)*vbH;
+              const r=Math.floor(svgY/CELL), c=Math.floor(svgX/CELL);
+              setHoveredCell({r,c});
+              paintCell(r,c);
+            }}
+            onMouseMove={e=>{
+              const svg=svgRef.current;
+              if(!svg) return;
+              const rect=svg.getBoundingClientRect();
+              const vbW=cols*CELL+36, vbH=rows*CELL+14;
+              const svgX=((e.clientX-rect.left)/rect.width)*vbW - 16;
+              const svgY=((e.clientY-rect.top)/rect.height)*vbH;
+              const r=Math.floor(svgY/CELL), c=Math.floor(svgX/CELL);
+              setHoveredCell({r,c});
+              if(painting&&tool!=="pin"&&tool!=="muis") paintCell(r,c);
+            }}
+            onMouseUp={()=>setPainting(false)}
+            onMouseLeave={()=>{setPainting(false);setHoveredCell(null);}}
+          >
+
+            {/* Garden outline filled area */}
+            {outline.length>=3&&(
+              <polygon points={outlinePts}
+                fill="rgba(240,236,226,.8)" stroke="#2E5A3D" strokeWidth={2}
+                strokeLinejoin="round"/>
+            )}
+
+            {/* Cells */}
+            {Array.from({length:rows},(_,r)=>Array.from({length:cols},(_,c)=>{
+              const inOL=cellInOutline(r,c);
+              const z=getZone(r,c);
+              const zd=z?ZONE_DEF[z]:null;
+              const pin=getPin(r,c);
+              const isHov=hoveredCell?.r===r&&hoveredCell?.c===c;
+              return(
+                <g key={ck(r,c)}
+                  onClick={e=>{if(tool==="pin"||tool==="muis")clickCell(r,c);}}
+                  style={{cursor:inOL?(tool==="pin"||tool==="muis"?"cell":"crosshair"):"default",pointerEvents:inOL?"auto":"none"}}
+                >
+                  <rect x={c*CELL} y={r*CELL} width={CELL} height={CELL}
+                    fill={!inOL?"rgba(0,0,0,.06)":zd?zd.fill:"transparent"}
+                    stroke={!inOL?"rgba(0,0,0,.04)":zd?zd.stroke:K.border}
+                    strokeWidth={zd?1.2:0.4}
+                    opacity={!inOL?.6:1}/>
+                  {inOL&&isHov&&!pin&&(
+                    <rect x={c*CELL+1} y={r*CELL+1} width={CELL-2} height={CELL-2}
+                      fill={tool==="eraser"?"rgba(192,58,63,.18)":"rgba(46,90,61,.16)"} rx={2}/>
+                  )}
+                  {(()=>{
+                    const cellPins=getPinsAt(r,c);
+                    if(cellPins.length===0) return null;
+                    const isHovCell=hoveredCell?.r===r&&hoveredCell?.c===c;
+                    // Show up to 4 mini-dots for multi-pin, or single large pin
+                    if(cellPins.length===1){
+                      const p=cellPins[0];
+                      return(<g>
+                        <ellipse cx={c*CELL+CELL/2} cy={r*CELL+CELL-3} rx={4} ry={2} fill="rgba(0,0,0,.18)"/>
+                        <path d={`M${c*CELL+CELL/2} ${r*CELL+CELL-4} C${c*CELL+CELL/2-5} ${r*CELL+CELL-9} ${c*CELL+CELL/2-6} ${r*CELL+4} ${c*CELL+CELL/2} ${r*CELL+3} C${c*CELL+CELL/2+6} ${r*CELL+4} ${c*CELL+CELL/2+5} ${r*CELL+CELL-9} ${c*CELL+CELL/2} ${r*CELL+CELL-4}Z`}
+                          fill={p.color} stroke="#fff" strokeWidth={1.5}/>
+                        <circle cx={c*CELL+CELL/2} cy={r*CELL+7} r={3} fill="#fff" opacity={.9}/>
+                        {isHovCell&&(tool==="pin"||tool==="muis")&&<>
+                          <circle cx={c*CELL+CELL-3} cy={r*CELL+3} r={5} fill={tool==="muis"?"#5A3A8A":K.danger} stroke="#fff" strokeWidth={1}/>
+                          <text x={c*CELL+CELL-3} y={r*CELL+6.5} textAnchor="middle" fontSize={7} fill="#fff" fontWeight="bold">{tool==="muis"?"i":"✕"}</text>
+                        </>}
+                      </g>);
+                    }
+                    // Multiple pins: show colored dot cluster
+                    const positions=[[.25,.25],[.75,.25],[.25,.75],[.75,.75]];
+                    return(<g>
+                      {cellPins.slice(0,4).map((p,pi)=>{
+                        const [fx,fy]=positions[pi]||[.5,.5];
+                        return(<circle key={p.id} cx={c*CELL+fx*CELL} cy={r*CELL+fy*CELL} r={4}
+                          fill={p.color} stroke="#fff" strokeWidth={1.2}/>);
+                      })}
+                      {cellPins.length>4&&<text x={c*CELL+CELL-3} y={r*CELL+CELL-2} fontSize={8} fill={K.muted} textAnchor="end">+{cellPins.length-4}</text>}
+                      {isHovCell&&(tool==="pin"||tool==="muis")&&<>
+                        <rect x={c*CELL+CELL-13} y={r*CELL} width={13} height={10} rx={3} fill={tool==="muis"?"#5A3A8A":K.danger}/>
+                        <text x={c*CELL+CELL-6.5} y={r*CELL+7.5} textAnchor="middle" fontSize={7} fill="#fff" fontWeight="bold">{tool==="muis"?"i":"✕"}</text>
+                      </>}
+                    </g>);
+                  })()}
+                </g>
+              );
+            }))}
+
+            {/* Outline border on top */}
+            {outline.length>=3&&(
+              <polygon points={outlinePts}
+                fill="none" stroke="#2E5A3D" strokeWidth={2}
+                strokeLinejoin="round"/>
+            )}
+
+            {/* Grid lines */}
+            {Array.from({length:rows+1},(_,r)=>(
+              <line key={`h${r}`} x1={0} y1={r*CELL} x2={cols*CELL} y2={r*CELL}
+                stroke={r%2===0?"#c8c0b0":"#ddd8ce"} strokeWidth={r%2===0?.6:.3}/>
+            ))}
+            {Array.from({length:cols+1},(_,c)=>(
+              <line key={`v${c}`} x1={c*CELL} y1={0} x2={c*CELL} y2={rows*CELL}
+                stroke={c%2===0?"#c8c0b0":"#ddd8ce"} strokeWidth={c%2===0?.6:.3}/>
+            ))}
+
+            {/* Axes labels */}
+            {Array.from({length:Math.floor(cols/2)+1},(_,i)=>(
+              <text key={`ml${i}`} x={i*2*CELL} y={rows*CELL+10} fontSize={8} fill={K.muted} textAnchor="middle">{i}m</text>
+            ))}
+            {Array.from({length:Math.floor(rows/2)+1},(_,i)=>(
+              <text key={`mr${i}`} x={-4} y={i*2*CELL+3} fontSize={8} fill={K.muted} textAnchor="end">{i}m</text>
+            ))}
+
+            {/* Hover → set hoveredPin */}
+            {hoveredCell&&tool==="pin"&&(()=>{const p=getPin(hoveredCell.r,hoveredCell.c);if(p&&hoveredPin!==p.id)setHoveredPin(p.id);else if(!p&&hoveredPin)setHoveredPin(null);return null;})()}
+          </svg>
+        </div>{/* end grid div */}
+        </div>{/* end scroll div */}
+      </Card>
+
+      {/* Pin legend */}
+      {pinnedSpecies.length>0&&<Card style={{marginTop:10}}>
+        <div style={{fontSize:11,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>
+          Geplante soorten — {pinnedSpecies.length} soort{pinnedSpecies.length!==1?"en":""}
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {pinnedSpecies.map(pin=>(
+            <div key={pin.plantId} style={{display:"flex",alignItems:"center",gap:5,
+              padding:"4px 10px",borderRadius:12,background:"#fff",border:`1.5px solid ${pin.color}`,fontSize:12}}>
+              <span style={{width:10,height:10,borderRadius:"50%",background:pin.color,flexShrink:0}}/>
+              {pin.naam}
+              <span style={{fontSize:10,color:K.muted,marginLeft:2}}>×{pins.filter(p=>p.plantId===pin.plantId).length}</span>
+            </div>
+          ))}
+        </div>
+      </Card>}
+    </>}
+
+    {/* ── FLOATING SCALE + DISTANCE INDICATOR — fixed to bottom of screen ── */}
+    <div style={{
+      position:"fixed",
+      bottom:16,
+      left:"50%",
+      transform:"translateX(-50%)",
+      zIndex:500,
+      background:"rgba(31,58,42,.92)",
+      backdropFilter:"blur(8px)",
+      color:"#F3EBDD",
+      borderRadius:24,
+      padding:"7px 18px",
+      display:"flex",
+      alignItems:"center",
+      gap:14,
+      boxShadow:"0 4px 20px rgba(0,0,0,.35)",
+      fontSize:12,
+      fontWeight:600,
+      pointerEvents:"none",
+      whiteSpace:"nowrap",
+    }}>
+      {/* Scale bar: 1m */}
+      <div style={{display:"flex",alignItems:"center",gap:5}}>
+        <svg width={CELL*2} height={10} style={{flexShrink:0}}>
+          <line x1={0} y1={5} x2={CELL*2} y2={5} stroke="#F3EBDD" strokeWidth={2}/>
+          <line x1={0} y1={2} x2={0} y2={8} stroke="#F3EBDD" strokeWidth={1.5}/>
+          <line x1={CELL*2} y1={2} x2={CELL*2} y2={8} stroke="#F3EBDD" strokeWidth={1.5}/>
+        </svg>
+        <span style={{opacity:.85}}>1 m</span>
+      </div>
+      <span style={{opacity:.4}}>|</span>
+      {/* Scale bar: 0.5m */}
+      <div style={{display:"flex",alignItems:"center",gap:5}}>
+        <svg width={CELL} height={10} style={{flexShrink:0}}>
+          <line x1={0} y1={5} x2={CELL} y2={5} stroke="#F3EBDD" strokeWidth={1.5} opacity={.7}/>
+          <line x1={0} y1={3} x2={0} y2={7} stroke="#F3EBDD" strokeWidth={1.5} opacity={.7}/>
+          <line x1={CELL} y1={3} x2={CELL} y2={7} stroke="#F3EBDD" strokeWidth={1.5} opacity={.7}/>
+        </svg>
+        <span style={{opacity:.65}}>0,5 m</span>
+      </div>
+      {/* Live distance — phase 1 */}
+      {!outlineClosed&&snapPt&&outline.length>0&&(()=>{
+        const last=outline[outline.length-1];
+        const dx=(snapPt.x-last.x)/CELL*0.5;
+        const dy=(snapPt.y-last.y)/CELL*0.5;
+        const distM=Math.sqrt(dx*dx+dy*dy);
+        if(distM<0.05) return null;
+        return(<>
+          <span style={{opacity:.4}}>|</span>
+          <span style={{
+            background:"rgba(255,255,255,.18)",
+            borderRadius:12,
+            padding:"2px 10px",
+            fontSize:13,
+            fontWeight:700,
+            letterSpacing:.3,
+          }}>📏 {distM.toFixed(1)} m</span>
+        </>);
+      })()}
+      {/* Phase 2 stats */}
+      {outlineClosed&&<>
+        <span style={{opacity:.4}}>|</span>
+        <span style={{opacity:.85}}>{paintedCount} vakken · {totalM2} m²</span>
+      </>}
+    </div>
+
+    {/* Cell Info Modal */}
+    {showCellInfo&&selectedCell&&<Modal open={showCellInfo} onClose={()=>setShowCellInfo(false)} title={`Cel (${selectedCell.c+1}, ${selectedCell.r+1}) — ${((selectedCell.c)*.5).toFixed(1)}m × ${((selectedCell.r)*.5).toFixed(1)}m`}>
+      {(()=>{
+        const {r,c}=selectedCell;
+        const zone=getZone(r,c);
+        const cellPins=getPinsAt(r,c);
+        const zoneDef=zone?ZONE_DEF[zone]:null;
+        return(<div>
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Zone</div>
+            {zoneDef
+              ?<div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"6px 14px",borderRadius:10,
+                  background:zoneDef.fill,border:`1.5px solid ${zoneDef.stroke}`,fontSize:13,fontWeight:600}}>
+                  {zoneDef.label}
+                </div>
+              :<div style={{fontSize:13,color:K.muted,fontStyle:"italic"}}>Geen zone ingekleurd</div>
+            }
+          </div>
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Planten in deze cel ({cellPins.length})</div>
+            {cellPins.length===0
+              ?<div style={{fontSize:13,color:K.muted,fontStyle:"italic"}}>Geen planten gepind</div>
+              :<div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {cellPins.map(p=>(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",
+                    borderRadius:8,background:"#fff",border:`1.5px solid ${p.color}`}}>
+                    <span style={{width:12,height:12,borderRadius:"50%",background:p.color,flexShrink:0}}/>
+                    <span style={{flex:1,fontSize:13,fontWeight:600}}>{p.naam}</span>
+                    <button onClick={()=>{setGardenMap(prev=>({...prev,pins:(prev.pins||[]).filter(x=>x.id!==p.id)}));}}
+                      style={{padding:"2px 8px",borderRadius:6,border:"none",background:K.dangerLight,
+                        color:K.danger,fontSize:11,cursor:"pointer",fontWeight:600}}>
+                      Verwijderen
+                    </button>
+                  </div>
+                ))}
+              </div>
+            }
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"space-between"}}>
+            <Button small onClick={()=>{setShowCellInfo(false);setTool("pin");setPendingCell(selectedCell);setShowPinPicker(true);setPinSearch("");}}>
+              📍 Pin toevoegen
+            </Button>
+            <Button small variant="secondary" onClick={()=>setShowCellInfo(false)}>Sluiten</Button>
+          </div>
+        </div>);
+      })()}
+    </Modal>}
+
+    {/* Pin plant picker modal */}
+    <Modal open={showPinPicker} onClose={()=>{setShowPinPicker(false);setPendingCell(null);}} title="Plant kiezen voor pin">
+      <div style={{marginBottom:10}}>
+        <input value={pinSearch} onChange={e=>setPinSearch(e.target.value)} placeholder="Zoek soort..." autoFocus
+          style={{width:"100%",padding:"8px 12px",border:`2px solid ${K.border}`,borderRadius:8,
+            fontSize:13,fontFamily:"inherit",boxSizing:"border-box",outline:"none"}}/>
+      </div>
+      {allPlants.length===0&&<div style={{padding:"20px",textAlign:"center",fontSize:13,color:K.muted}}>
+        Nog geen planten.{" "}
+        <span onClick={()=>{setShowPinPicker(false);onNavigateInventaris&&onNavigateInventaris();}}
+          style={{color:K.accent,cursor:"pointer",fontWeight:600}}>Voeg er eerst een toe →</span>
+      </div>}
+      <div style={{maxHeight:340,overflowY:"auto"}}>
+        {filteredPlants.map(p=>{
+          const color=plantPinColor(p.id);
+          const cnt=pins.filter(pin=>pin.plantId===p.id).length;
+          return(
+            <div key={p.id} onClick={()=>placePin(p)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"9px 6px",cursor:"pointer",
+                borderBottom:`1px solid ${K.border}`}}
+              onMouseEnter={e=>e.currentTarget.style.background=K.bL}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <span style={{width:14,height:14,borderRadius:"50%",background:color,
+                border:"2px solid #fff",boxShadow:"0 1px 4px rgba(0,0,0,.2)",flexShrink:0}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600}}>{p.naam}</div>
+                {p.latijn&&<div style={{fontSize:11,color:K.muted,fontStyle:"italic"}}>{p.latijn}</div>}
+              </div>
+              {cnt>0&&<span style={{fontSize:10,fontWeight:700,padding:"1px 7px",
+                borderRadius:10,background:K.accentLight,color:K.accent}}>{cnt}×</span>}
+            </div>
+          );
+        })}
+        {filteredPlants.length===0&&allPlants.length>0&&
+          <div style={{padding:16,textAlign:"center",fontSize:13,color:K.muted}}>Geen resultaten</div>}
+      </div>
+    </Modal>
+
+    {/* Resize modal */}
+    <Modal open={showSizeModal} onClose={()=>setShowSizeModal(false)} title="Raster formaat">
+      <p style={{fontSize:13,color:K.muted,marginBottom:14}}>Stel de afmeting in van het raster. Elk vakje = 0,5×0,5 meter.</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <Input label="Breedte (kolommen)" type="number" value={sizeForm.cols}
+          onChange={e=>setSizeForm(p=>({...p,cols:e.target.value}))} min={4} max={60}/>
+        <Input label="Hoogte (rijen)" type="number" value={sizeForm.rows}
+          onChange={e=>setSizeForm(p=>({...p,rows:e.target.value}))} min={4} max={50}/>
+      </div>
+      <p style={{fontSize:11,color:K.muted,margin:"0 0 14px"}}>
+        → {(sizeForm.cols*.5).toFixed(1)} m breed × {(sizeForm.rows*.5).toFixed(1)} m hoog
+        = {(sizeForm.cols*sizeForm.rows*.25).toFixed(1)} m²
+      </p>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <Button variant="secondary" onClick={()=>setShowSizeModal(false)}>Annuleren</Button>
+        <Button onClick={resizeGrid}>Opslaan</Button>
+      </div>
+    </Modal>
+  </div>);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FOTOJOURNAAL TAB
+// ═══════════════════════════════════════════════════════════════════
+function FotojournaalTab({journal,setJournal}){
+  const [showCapture,setShowCapture]=useState(false);
+  const [spots,setSpots]=useState(()=>{
+    // spots are stored inside journal as a separate key
+    try{const v=localStorage.getItem("tr_spots");return v?JSON.parse(v):[];}catch(e){return [];}
+  });
+  const [selectedSpot,setSelectedSpot]=useState(null);
+  const [showAddSpot,setShowAddSpot]=useState(false);
+  const [spotForm,setSpotForm]=useState({naam:"",beschrijving:"",referencePhoto:null});
+  const [captureSpot,setCaptureSpot]=useState(null);
+  const [capturePhoto,setCapturePhoto]=useState(null);
+  const [showTimelapse,setShowTimelapse]=useState(null); // spot id
+  const [tlFrame,setTlFrame]=useState(0);
+  const tlRef=useRef();
+  const frRef=useRef();
+  const capRef=useRef();
+  const today_str=today();
+
+  // Save spots separately
+  useEffect(()=>{try{localStorage.setItem("tr_spots",JSON.stringify(spots));}catch(e){};},[spots]);
+
+  function handleSpotPhoto(e,setter){
+    const f=e.target.files?.[0];if(!f)return;
+    const r=new FileReader();r.onload=ev=>setter(ev.target.result);r.readAsDataURL(f);e.target.value="";
+  }
+
+  function saveSpot(){
+    if(!spotForm.naam.trim()) return;
+    setSpots(prev=>[...prev,{id:uid(),naam:spotForm.naam,beschrijving:spotForm.beschrijving,referencePhoto:spotForm.referencePhoto,created:today_str}]);
+    setSpotForm({naam:"",beschrijving:"",referencePhoto:null});
+    setShowAddSpot(false);
+  }
+
+  function savePhoto(){
+    if(!capturePhoto||!captureSpot) return;
+    setJournal(prev=>[...prev,{id:uid(),spotId:captureSpot.id,date:today_str,photo:capturePhoto,time:new Date().toLocaleTimeString("nl",{hour:"2-digit",minute:"2-digit"})}]);
+    setCapturePhoto(null);
+    setCaptureSpot(null);
+    setShowCapture(false);
+  }
+
+  function deleteEntry(id){setJournal(prev=>prev.filter(e=>e.id!==id));}
+  function deleteSpot(id){
+    setSpots(prev=>prev.filter(s=>s.id!==id));
+    setJournal(prev=>prev.filter(e=>e.spotId!==id));
+  }
+
+  // Timelapse viewer
+  function startTimelapse(spot){
+    setShowTimelapse(spot.id);
+    setTlFrame(0);
+  }
+  const tlEntries=showTimelapse?journal.filter(e=>e.spotId===showTimelapse).sort((a,b)=>a.date.localeCompare(b.date)):[];
+
+  useEffect(()=>{
+    if(!showTimelapse||tlEntries.length===0) return;
+    const iv=setInterval(()=>setTlFrame(f=>(f+1)%tlEntries.length),800);
+    return()=>clearInterval(iv);
+  },[showTimelapse,tlEntries.length]);
+
+  // Check which spots have a photo today
+  const todayPhotos=new Set(journal.filter(e=>e.date===today_str).map(e=>e.spotId));
+
+  return(<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <div>
+        <h2 style={{margin:0,fontSize:22,color:K.text}}>Fotojournaal</h2>
+        <p style={{margin:"4px 0 0",fontSize:13,color:K.muted}}>{spots.length} vaste hoek{spots.length!==1?"en":""} · {journal.length} foto's totaal</p>
+      </div>
+      <Button onClick={()=>setShowAddSpot(true)}><Icons.plus size={14}/>Nieuwe hoek</Button>
+    </div>
+
+    {/* Daily reminder banner */}
+    {spots.length>0&&spots.some(s=>!todayPhotos.has(s.id))&&(
+      <Card style={{marginBottom:16,background:"#FFF8E8",borderLeft:`3px solid #C4703A`}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#C4703A",marginBottom:4}}>📸 Dagelijkse foto herinnering</div>
+        <div style={{fontSize:12,color:K.muted}}>
+          {spots.filter(s=>!todayPhotos.has(s.id)).map(s=>s.naam).join(", ")} — nog geen foto vandaag.
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+          {spots.filter(s=>!todayPhotos.has(s.id)).map(s=>(
+            <button key={s.id} onClick={()=>{setCaptureSpot(s);setShowCapture(true);}}
+              style={{padding:"5px 12px",borderRadius:8,border:"none",background:"#C4703A",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              📷 {s.naam}
+            </button>
+          ))}
+        </div>
+      </Card>
+    )}
+
+    {spots.length===0&&<Card><EmptyState icon={<Icons.camera2 size={32} color={K.muted}/>} title="Nog geen vaste hoeken" sub="Maak een vaste hoek aan om dagelijks een foto te maken vanuit dezelfde positie."/></Card>}
+
+    {/* Spots grid */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
+      {spots.map(spot=>{
+        const entries=journal.filter(e=>e.spotId===spot.id).sort((a,b)=>b.date.localeCompare(a.date));
+        const hasToday=todayPhotos.has(spot.id);
+        const lastEntry=entries[0];
+        return(
+          <Card key={spot.id} style={{borderLeft:`3px solid ${hasToday?K.accent:"#E8DCC8"}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:700,color:K.text}}>{spot.naam}</div>
+                {spot.beschrijving&&<div style={{fontSize:12,color:K.muted}}>{spot.beschrijving}</div>}
+                <div style={{fontSize:11,color:K.muted,marginTop:2}}>{entries.length} foto's</div>
+              </div>
+              <div style={{display:"flex",gap:4}}>
+                {entries.length>=2&&<button onClick={()=>startTimelapse(spot)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:10,cursor:"pointer",color:K.accent,fontWeight:700}}>▶ Timelaps</button>}
+                <button onClick={()=>deleteSpot(spot.id)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:10,cursor:"pointer",color:K.danger}}>✕</button>
+              </div>
+            </div>
+
+            {/* Latest photo */}
+            {lastEntry&&<div style={{width:"100%",height:160,borderRadius:8,overflow:"hidden",marginBottom:8,position:"relative"}}>
+              <img src={lastEntry.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              <div style={{position:"absolute",bottom:4,left:6,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:10,padding:"2px 6px",borderRadius:4}}>{lastEntry.date} {lastEntry.time}</div>
+              {hasToday&&<div style={{position:"absolute",top:6,right:6,background:K.accent,color:"#fff",fontSize:10,padding:"2px 8px",borderRadius:10,fontWeight:700}}>✓ Vandaag</div>}
+            </div>}
+
+            {/* Reference overlay button */}
+            {spot.referencePhoto&&!lastEntry&&<div style={{width:"100%",height:120,borderRadius:8,overflow:"hidden",marginBottom:8,position:"relative"}}>
+              <img src={spot.referencePhoto} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:.5}}/>
+              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#666",fontStyle:"italic"}}>Referentiefoto</div>
+            </div>}
+
+            <button onClick={()=>{setCaptureSpot(spot);setCapturePhoto(null);setShowCapture(true);}}
+              style={{width:"100%",padding:"8px",borderRadius:8,border:`2px dashed ${K.accent}`,background:K.accentLight,color:K.accent,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              📷 Foto maken
+            </button>
+
+            {/* Recent strip */}
+            {entries.length>1&&<div style={{display:"flex",gap:4,marginTop:8,overflowX:"auto"}}>
+              {entries.slice(0,8).map(e=>(
+                <div key={e.id} style={{position:"relative",flexShrink:0}}>
+                  <img src={e.photo} alt="" style={{width:44,height:44,objectFit:"cover",borderRadius:5,border:`1px solid ${K.border}`}}/>
+                  <button onClick={()=>deleteEntry(e.id)} style={{position:"absolute",top:-4,right:-4,width:14,height:14,borderRadius:"50%",background:K.danger,border:"none",color:"#fff",fontSize:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>✕</button>
+                </div>
+              ))}
+            </div>}
+          </Card>
+        );
+      })}
+    </div>
+
+    {/* Capture modal */}
+    <Modal open={showCapture} onClose={()=>{setShowCapture(false);setCapturePhoto(null);}} title={`📷 ${captureSpot?.naam||""}`}>
+      {captureSpot?.referencePhoto&&<div style={{marginBottom:12}}>
+        <div style={{fontSize:11,fontWeight:600,color:K.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Referentie (maak foto vanuit dezelfde hoek)</div>
+        <img src={captureSpot.referencePhoto} alt="" style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:8,opacity:.7,border:`1px solid ${K.border}`}}/>
+      </div>}
+      <input ref={capRef} type="file" accept="image/*" capture="environment" onChange={e=>handleSpotPhoto(e,setCapturePhoto)} style={{display:"none"}}/>
+      {capturePhoto
+        ?<div style={{position:"relative",marginBottom:12}}>
+          <img src={capturePhoto} alt="" style={{width:"100%",maxHeight:220,objectFit:"cover",borderRadius:10}}/>
+          <button onClick={()=>setCapturePhoto(null)} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.5)",border:"none",borderRadius:"50%",width:26,height:26,color:"#fff",cursor:"pointer",fontSize:14}}>✕</button>
+        </div>
+        :<div onClick={()=>capRef.current?.click()} style={{width:"100%",height:140,borderRadius:10,border:`2px dashed ${K.accent}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",background:K.accentLight,marginBottom:12,gap:6}}>
+          <Icons.camera2 size={28} color={K.accent}/>
+          <span style={{fontSize:13,color:K.accent,fontWeight:600}}>Foto maken / uploaden</span>
+        </div>
+      }
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <Button variant="secondary" onClick={()=>{setShowCapture(false);setCapturePhoto(null);}}>Annuleren</Button>
+        <Button onClick={savePhoto} disabled={!capturePhoto}><Icons.plus size={14}/>Opslaan</Button>
+      </div>
+    </Modal>
+
+    {/* Add spot modal */}
+    <Modal open={showAddSpot} onClose={()=>setShowAddSpot(false)} title="Nieuwe vaste hoek">
+      <Input label="Naam van de hoek" value={spotForm.naam} onChange={e=>setSpotForm(p=>({...p,naam:e.target.value}))} placeholder="Bijv. Voortuin links, Perenboom, Perk A..."/>
+      <TextArea label="Beschrijving (optioneel)" value={spotForm.beschrijving} onChange={e=>setSpotForm(p=>({...p,beschrijving:e.target.value}))} placeholder="Bijv. Vanuit het tuinhek richting het huis"/>
+      <div style={{marginBottom:12}}>
+        <label style={{display:"block",fontSize:12,fontWeight:600,color:K.muted,marginBottom:4,letterSpacing:.3,textTransform:"uppercase"}}>Referentiefoto (optioneel)</label>
+        <input ref={frRef} type="file" accept="image/*" capture="environment" onChange={e=>handleSpotPhoto(e,v=>setSpotForm(p=>({...p,referencePhoto:v})))} style={{display:"none"}}/>
+        {spotForm.referencePhoto
+          ?<div style={{position:"relative"}}>
+            <img src={spotForm.referencePhoto} alt="" style={{width:"100%",height:120,objectFit:"cover",borderRadius:8}}/>
+            <button onClick={()=>setSpotForm(p=>({...p,referencePhoto:null}))} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,.5)",border:"none",borderRadius:"50%",width:22,height:22,color:"#fff",cursor:"pointer",fontSize:12}}>✕</button>
+          </div>
+          :<div onClick={()=>frRef.current?.click()} style={{width:"100%",height:80,borderRadius:8,border:`2px dashed ${K.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",background:K.bL,fontSize:12,color:K.muted,gap:6}}>
+            <Icons.camera size={16}/> Referentiefoto uploaden
+          </div>
+        }
+      </div>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <Button variant="secondary" onClick={()=>setShowAddSpot(false)}>Annuleren</Button>
+        <Button onClick={saveSpot} disabled={!spotForm.naam.trim()}><Icons.plus size={14}/>Aanmaken</Button>
+      </div>
+    </Modal>
+
+    {/* Timelapse viewer */}
+    {showTimelapse&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.9)",zIndex:3000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowTimelapse(null)}>
+      <div onClick={e=>e.stopPropagation()} style={{maxWidth:600,width:"95%"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{color:"#fff",fontWeight:700,fontSize:16}}>{spots.find(s=>s.id===showTimelapse)?.naam} — Timelaps</div>
+          <button onClick={()=>setShowTimelapse(null)} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"#fff",cursor:"pointer",fontSize:18}}>✕</button>
+        </div>
+        {tlEntries[tlFrame]&&<>
+          <img src={tlEntries[tlFrame].photo} alt="" style={{width:"100%",borderRadius:10,maxHeight:"60vh",objectFit:"contain"}}/>
+          <div style={{color:"rgba(255,255,255,.7)",textAlign:"center",marginTop:8,fontSize:13}}>{tlEntries[tlFrame].date} {tlEntries[tlFrame].time} — {tlFrame+1}/{tlEntries.length}</div>
+          <div style={{display:"flex",gap:3,marginTop:8,justifyContent:"center",flexWrap:"wrap"}}>
+            {tlEntries.map((_,i)=>(
+              <div key={i} onClick={()=>setTlFrame(i)} style={{width:8,height:8,borderRadius:"50%",background:i===tlFrame?"#fff":"rgba(255,255,255,.3)",cursor:"pointer"}}/>
+            ))}
+          </div>
+        </>}
+      </div>
+    </div>}
+  </div>);
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════════
+// ── localStorage persistence helpers ──
+function lsGet(key,fallback){try{const v=localStorage.getItem(key);return v?JSON.parse(v):fallback;}catch(e){return fallback;}}
+function lsSet(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch(e){}}
+
+const INITIAL_TASKS=[
+  {id:"d1",title:"Snoeien vaste planten",description:"Oude stengels terugsnoeien",category:"Snoeien",startDate:"2026-02-01",endDate:"2026-03-15",repeat:"jaarlijks",plantRef:"groep:Alle vaste planten",plantLabel:"Alle vaste planten",gardenCategory:"sierplanten"},
+  {id:"d2",title:"Dahlia knollen voorkiemen",description:"In vochtig zaagsel bij 15°C",category:"Planten/Uitplanten",startDate:"2026-03-01",endDate:"2026-04-01",repeat:"jaarlijks",plantRef:"bol:100",plantLabel:"Dahlia 'Café au Lait'",gardenCategory:"sierplanten"},
+  {id:"d3",title:"Tomaten zaaien",description:"Binnen zaaien, zaaigrond",category:"Zaaien",startDate:"2026-02-15",endDate:"2026-03-15",repeat:"jaarlijks",plantRef:"",plantLabel:"",gardenCategory:"moestuin"},
+  {id:"d4",title:"Bollen planten (najaar)",description:"Tulpen, narcissen, krokussen",category:"Planten/Uitplanten",startDate:"2026-10-01",endDate:"2026-11-30",repeat:"jaarlijks",plantRef:"groep:Alle bollen & knollen",plantLabel:"Alle bollen & knollen",gardenCategory:"sierplanten"},
+  {id:"d5",title:"Eerste bemesting",description:"Organische mest rond vaste planten",category:"Bemesten",startDate:"2026-03-15",endDate:"2026-04-15",repeat:"jaarlijks",plantRef:"groep:Alle vaste planten",plantLabel:"Alle vaste planten",gardenCategory:"sierplanten"},
+];
+
 function CottageGardenApp(){
   const [tab,setTab]=useState(0);
-  const [plants,setPlants]=useState(INITIAL_PLANTS);
-  const [bulbs,setBulbs]=useState(INITIAL_BULBS);
-  const [seeds,setSeeds]=useState([]);
-  const [trees,setTrees]=useState([]);
-  const [pondPlants,setPondPlants]=useState([]);
-  const [veggies,setVeggies]=useState([]);
-  const [tasks,setTasks]=useState([
-    {id:"d1",title:"Snoeien vaste planten",description:"Oude stengels terugsnoeien",category:"Snoeien",startDate:"2026-02-01",endDate:"2026-03-15",repeat:"jaarlijks",plantRef:"groep:Alle vaste planten",plantLabel:"Alle vaste planten",gardenCategory:"sierplanten"},
-    {id:"d2",title:"Dahlia knollen voorkiemen",description:"In vochtig zaagsel bij 15°C",category:"Planten/Uitplanten",startDate:"2026-03-01",endDate:"2026-04-01",repeat:"jaarlijks",plantRef:"bol:100",plantLabel:"Dahlia 'Café au Lait'",gardenCategory:"sierplanten"},
-    {id:"d3",title:"Tomaten zaaien",description:"Binnen zaaien, zaaigrond",category:"Zaaien",startDate:"2026-02-15",endDate:"2026-03-15",repeat:"jaarlijks",plantRef:"",plantLabel:"",gardenCategory:"moestuin"},
-    {id:"d4",title:"Bollen planten (najaar)",description:"Tulpen, narcissen, krokussen",category:"Planten/Uitplanten",startDate:"2026-10-01",endDate:"2026-11-30",repeat:"jaarlijks",plantRef:"groep:Alle bollen & knollen",plantLabel:"Alle bollen & knollen",gardenCategory:"sierplanten"},
-    {id:"d5",title:"Eerste bemesting",description:"Organische mest rond vaste planten",category:"Bemesten",startDate:"2026-03-15",endDate:"2026-04-15",repeat:"jaarlijks",plantRef:"groep:Alle vaste planten",plantLabel:"Alle vaste planten",gardenCategory:"sierplanten"},
-  ]);
-  const [completions,setCompletions]=useState([]);
-  const [wishlist,setWishlist]=useState([]);
+  const [plants,setPlants]=useState(()=>lsGet("tr_plants",INITIAL_PLANTS));
+  const [bulbs,setBulbs]=useState(()=>lsGet("tr_bulbs",INITIAL_BULBS));
+  const [seeds,setSeeds]=useState(()=>lsGet("tr_seeds",[]));
+  const [trees,setTrees]=useState(()=>lsGet("tr_trees",[]));
+  const [pondPlants,setPondPlants]=useState(()=>lsGet("tr_pond",[]));
+  const [veggies,setVeggies]=useState(()=>lsGet("tr_veggies",[]));
+  const [tasks,setTasks]=useState(()=>lsGet("tr_tasks",INITIAL_TASKS));
+  const [completions,setCompletions]=useState(()=>lsGet("tr_completions",[]));
+  const [wishlist,setWishlist]=useState(()=>lsGet("tr_wishlist",[]));
+  const [gardenMap,setGardenMap]=useState(()=>lsGet("tr_gardenmap",{outline:[],outlineClosed:false,phase:"draw",cells:{},pins:[],cols:20,rows:16,gardenSized:false,gardenBreedte:null,gardenHoogte:null}));
+  const [journal,setJournal]=useState(()=>lsGet("tr_journal",[]));
+
+  // ── Persist all state to localStorage ──
+  useEffect(()=>{lsSet("tr_plants",plants);},[plants]);
+  useEffect(()=>{lsSet("tr_bulbs",bulbs);},[bulbs]);
+  useEffect(()=>{lsSet("tr_seeds",seeds);},[seeds]);
+  useEffect(()=>{lsSet("tr_trees",trees);},[trees]);
+  useEffect(()=>{lsSet("tr_pond",pondPlants);},[pondPlants]);
+  useEffect(()=>{lsSet("tr_veggies",veggies);},[veggies]);
+  useEffect(()=>{lsSet("tr_tasks",tasks);},[tasks]);
+  useEffect(()=>{lsSet("tr_completions",completions);},[completions]);
+  useEffect(()=>{lsSet("tr_wishlist",wishlist);},[wishlist]);
+  useEffect(()=>{lsSet("tr_gardenmap",gardenMap);},[gardenMap]);
+  useEffect(()=>{lsSet("tr_journal",journal);},[journal]);
+
+  // ── Auto-purge: verlopen taken ouder dan 7 dagen ──
+  useEffect(()=>{
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-7);
+    const cutStr=cutoff.toISOString().split("T")[0];
+    setTasks(prev=>prev.filter(t=>{
+      if(!t.startDate) return true;
+      if(t.endDate&&t.endDate>=cutStr) return true;
+      if(!t.endDate&&t.startDate>=cutStr) return true;
+      return false;
+    }));
+  },[]);
+
   const [showApiModal,setShowApiModal]=useState(false);
   const [apiKeyInput,setApiKeyInput]=useState(()=>{try{return localStorage.getItem("cg_apikey")||"";}catch(e){return "";}});
   function saveApiKey(){const k=apiKeyInput.trim();window.__CG_API_KEY=k;try{localStorage.setItem("cg_apikey",k);}catch(e){}setShowApiModal(false);}
@@ -1574,18 +2813,16 @@ function CottageGardenApp(){
 
   const tabs=[
     {icon:Icons.dashboard,label:"Dashboard"},
-    {icon:Icons.tasks,label:"Taken"},
-    {icon:Icons.plant,label:"Sierplanten"},
-    {icon:Icons.tree,label:"Bomen"},
-    {icon:Icons.pond,label:"Vijver"},
-    {icon:Icons.veggie,label:"Moestuin"},
-    {icon:Icons.seed,label:"Zadenbank"},
+    {icon:Icons.map,label:"Plattegrond"},
+    {icon:Icons.plant,label:"Inventaris"},
     {icon:Icons.chart,label:"Bloeikalender"},
+    {icon:Icons.tasks,label:"Taken"},
+    {icon:Icons.camera2,label:"Journaal"},
     {icon:Icons.heart,label:"Wishlist"},
   ];
 
   // Per-tab accent colors for active state
-  const tabAccents=["","","",K.tree,K.pond,K.veggie,"","#2E7DA8",K.wish];
+  const tabAccents=["","#5A3A8A","","#2E7DA8","","#C4703A",K.wish];
 
   return(
     <div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",background:K.bg,minHeight:"100vh",color:K.text}}>
@@ -1593,7 +2830,7 @@ function CottageGardenApp(){
       <div style={{background:"linear-gradient(135deg,#1F3A2A 0%,#2E5A3D 60%,#3D6B4C 100%)",padding:"12px 20px",color:"#F3EBDD"}}>
         <div style={{maxWidth:"100%",margin:"0 auto",display:"flex",alignItems:"center",gap:12}}>
           <img src="data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAQABAADASIAAhEBAxEB/8QAHQABAAEEAwEAAAAAAAAAAAAAAAgFBgcJAQIEA//EAFsQAQABAwMBBAYFBgcJDQgCAwABAgMEBQYRBxIhMUEIE1FhcYEUIjKRoRVCUmKxsiNDcoKzwdEzZHN0dZKTotIWFyQ0NjdEU2Nlo8LhGCUmJ1WDw/A1VEWF8f/EABsBAQACAwEBAAAAAAAAAAAAAAADBAECBQYH/8QAOhEBAAICAQIDBAkEAQQBBQAAAAECAxEEITEFEkEGE1FhFCIycYGRobHBQtHh8CMWM1JyFSQlU2KC/9oADAMBAAIRAxEAPwCZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//2Q==" alt="TuinRegister logo" style={{height:52,width:52,objectFit:"contain",borderRadius:6,flexShrink:0,background:"none"}}/>
-          <div style={{flex:1}}><h1 style={{margin:0,fontSize:20,fontWeight:700,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",letterSpacing:.5}}>TuinRegister <span style={{fontSize:12,fontWeight:600,opacity:.75,letterSpacing:.5}}>(v16)</span></h1><div style={{fontSize:11,opacity:.8,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",letterSpacing:.5}}>Tuinbeheer & Inventaris</div></div>
+          <div style={{flex:1}}><h1 style={{margin:0,fontSize:20,fontWeight:700,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",letterSpacing:.5}}>TuinRegister <span style={{fontSize:12,fontWeight:600,opacity:.75,letterSpacing:.5}}>(v27)</span></h1><div style={{fontSize:11,opacity:.8,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",letterSpacing:.5}}>Tuinbeheer & Inventaris</div></div>
           <button onClick={()=>setShowApiModal(true)} title="API-sleutel instellen" style={{background:hasKey?"rgba(255,255,255,.15)":"rgba(255,100,100,.35)",border:hasKey?"1px solid rgba(255,255,255,.3)":"1px solid rgba(255,150,150,.5)",borderRadius:8,cursor:"pointer",padding:"6px 10px",display:"flex",alignItems:"center",gap:6,color:"#fff",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:600,flexShrink:0}}>
             <span style={{fontSize:16}}>🔑</span>{hasKey?"API OK":"API instellen"}
           </button>
@@ -1622,14 +2859,12 @@ function CottageGardenApp(){
       </div>
       <div style={{maxWidth:"100%",margin:"0 auto",padding:"16px 20px 80px",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"}}>
         {tab===0&&<Dashboard tasks={tasks} setTasks={setTasks} completions={completions} setCompletions={setCompletions} plants={plants} seeds={seeds} bulbs={bulbs}/>}
-        {tab===1&&<TaskManager tasks={tasks} setTasks={setTasks} plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
-        {tab===2&&<PlantTab plants={plants} setPlants={setPlants} bulbs={bulbs} setBulbs={setBulbs} tasks={tasks} setTasks={setTasks}/>}
-        {tab===3&&<TreeTab trees={trees} setTrees={setTrees}/>}
-        {tab===4&&<PondTab pondPlants={pondPlants} setPondPlants={setPondPlants}/>}
-        {tab===5&&<VeggieTab veggies={veggies} setVeggies={setVeggies}/>}
-        {tab===6&&<SeedTab seeds={seeds} setSeeds={setSeeds}/>}
-        {tab===7&&<BloeikalenderTab plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
-        {tab===8&&<WishlistTab wishlist={wishlist} setWishlist={setWishlist}/>}
+        {tab===1&&<PlattegrondTab gardenMap={gardenMap} setGardenMap={setGardenMap} allPlants={[...plants,...bulbs,...trees,...pondPlants,...veggies]} onNavigateInventaris={()=>setTab(2)}/>}
+        {tab===2&&<InventarisTab plants={plants} setPlants={setPlants} bulbs={bulbs} setBulbs={setBulbs} trees={trees} setTrees={setTrees} pondPlants={pondPlants} setPondPlants={setPondPlants} veggies={veggies} setVeggies={setVeggies} seeds={seeds} setSeeds={setSeeds} tasks={tasks} setTasks={setTasks} gardenMap={gardenMap} setGardenMap={setGardenMap} onNavigatePlattegrond={()=>setTab(1)}/>}
+        {tab===3&&<BloeikalenderTab plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
+        {tab===4&&<TaskManager tasks={tasks} setTasks={setTasks} plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
+        {tab===5&&<FotojournaalTab journal={journal} setJournal={setJournal}/>}
+        {tab===6&&<WishlistTab wishlist={wishlist} setWishlist={setWishlist}/>}
       </div>
     </div>
   );
