@@ -539,7 +539,7 @@
   <div>
     <div class="footer-logo">Tuin<span>Register</span></div>
     <p>Tuinbeheer en inventaris platform voor de Nederlandse tuinliefhebber. Ontworpen met aandacht voor gebruiksgemak en privacy.</p>
-    <p style="margin-top:12px;">📧 info@tuinregister.nl</p>
+    <p style="margin-top:12px;">📧 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c5acaba3aa85b1b0acabb7a0a2acb6b1a0b7ebaba9">[email&#160;protected]</a></p>
   </div>
   <div>
     <h4>Platform</h4>
@@ -560,7 +560,7 @@
 </footer>
 <div class="footer-bottom">© 2025 TuinRegister.nl — Alle rechten voorbehouden</div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 const DEMO_EMAIL = 'demo';
 const DEMO_PASS  = 'demo1234';
 
@@ -602,8 +602,8 @@ function doLogin(){
   if(email === DEMO_EMAIL && pass === DEMO_PASS){
     closeModal('loginModal');
     // Redirect to app
-    alert('✓ Ingelogd als demo-gebruiker.\n\nU wordt doorgestuurd naar de TuinRegister app.\n\n(In productie: redirect naar /app)');
-    // window.location.href = 'app.html';
+    // Open the app — works when both files are in the same folder
+    window.location.href = 'app.html';
   } else {
     errEl.style.display='block';
     document.getElementById('login-pass').classList.add('err');
@@ -622,12 +622,4 @@ function doContact(){
 }
 
 // Smooth scroll for anchor links
-document.querySelectorAll('a[href^="#"]').forEach(a=>{
-  a.addEventListener('click',e=>{
-    const t=document.querySelector(a.getAttribute('href'));
-    if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'});}
-  });
-});
-</script>
-</body>
-</html>
+document.querySelectorA
