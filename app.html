@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TuinRegister v42 — Tuinbeheer & Inventaris</title>
+<title>TuinRegister v45 — Tuinbeheer & Inventaris</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -13,6 +13,7 @@
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F3EBDD; -webkit-text-size-adjust: 100%; }
@@ -342,13 +343,10 @@ EXTRA INSTRUCTIE OVER AANVULLEN:
 - Dit helpt de gebruiker onderscheiden wat van de foto komt en wat aangevuld is.
 - Laat GEEN veld leeg als je de informatie uit je kennis kunt aanvullen — vul het dan in met ★.`});
 
-      const apiKey=window.__CG_API_KEY||"";
-      if(!apiKey){setScanError("Voer eerst je Anthropic API-sleutel in via het 🔑 icoon rechtsboven.");setStep("form");setLoading(false);return;}
       const resp=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
         headers:{
           "Content-Type":"application/json",
-          "x-api-key":apiKey,
           "anthropic-version":"2023-06-01",
           "anthropic-dangerous-direct-browser-access":"true"
         },
@@ -548,14 +546,7 @@ function Dashboard({tasks,setTasks,completions,setCompletions,plants,seeds,bulbs
   const catTasks={verlopen:[],vandaag:[],dezeweek:[],volgweek:[]};
   sched.forEach(t=>{if(isDone(t))return;const c=classify(t.startDate,t.endDate);if(c)catTasks[c].push(t);});
 
-  seeds.forEach(s=>{if(!s.zaaiStart)return;const mi=getMonthIndex(s.zaaiStart);if(mi<0)return;const n=new Date(),st=new Date(n.getFullYear(),mi,1),ds=st.toISOString().split("T")[0],d=getDaysDiff(ds);
-    if(d>=-30&&d<=14){const c=classify(ds,ds);if(c&&!completions.find(x=>x.taskId===`seed-${s.id}-zaai`))catTasks[c].push({id:`seed-${s.id}-zaai`,naam:`Zaai ${s.naam}`,startDate:ds,source:"zaad"});}});
 
-  bulbs.forEach(b=>{if(!b.plantPeriode)return;const p=b.plantPeriode.split("-")[0]?.trim(),mi=getMonthIndex(p);if(mi<0)return;const n=new Date(),st=new Date(n.getFullYear(),mi,1),ds=st.toISOString().split("T")[0];
-    const c=classify(ds,ds);if(c&&!completions.find(x=>x.taskId===`bulb-${b.id}-plant`))catTasks[c].push({id:`bulb-${b.id}-plant`,naam:`${b.naam} planten`,startDate:ds,source:"bol"});});
-
-  plants.forEach(p=>{const n=new Date(),cm=n.getMonth(),bs=getMonthIndex(p.bloeiStart),be=getMonthIndex(p.bloeiEind);
-    if(bs>=0&&be>=0&&cm>=bs&&cm<=be&&!completions.find(c=>c.taskId===`plant-${p.id}-dh-${cm}`))catTasks.vandaag.push({id:`plant-${p.id}-dh-${cm}`,naam:`Uitgebloeide bloemen: ${p.naam}`,startDate:td,source:"plant"});});
 
   function handleComp(id){setNoteModal(id);setNoteText("");}
   function confirm(){setCompletions(prev=>[...prev,{taskId:noteModal,date:td,note:noteText,completedAt:new Date().toISOString()}]);setNoteModal(null);}
@@ -751,12 +742,12 @@ function Dashboard({tasks,setTasks,completions,setCompletions,plants,seeds,bulbs
 // ═══════════════════════════════════════════════════════════════════
 // TAB 2: TAKENBEHEER
 // ═══════════════════════════════════════════════════════════════════
-function TaskManager({tasks,setTasks,plants,bulbs,trees,pondPlants,veggies}){
+function TaskManager({tasks,setTasks,completions,setCompletions,plants,bulbs,trees,pondPlants,veggies}){
   const [search,setSearch]=useState("");
   const [editId,setEditId]=useState(null);
   const [showForm,setShowForm]=useState(false);
-  const [gardenCategory,setGardenCategory]=useState(""); // step 1 choice
-  const [step,setStep]=useState("cat"); // "cat" | "form"
+  const [gardenCategory,setGardenCategory]=useState("");
+  const [step,setStep]=useState("cat");
   const CATS=["Zaaien","Planten/Uitplanten","Snoeien","Oogsten","Bemesten","Water geven","Onkruid wieden","Verwerken","Onderhoud","Overig"];
   const REPS=[{value:"",label:"Geen herhaling"},{value:"dagelijks",label:"Dagelijks"},{value:"wekelijks",label:"Wekelijks"},{value:"tweewekelijks",label:"Tweewekelijks"},{value:"maandelijks",label:"Maandelijks"},{value:"jaarlijks",label:"Jaarlijks"}];
   const empty={id:"",title:"",description:"",category:"Overig",startDate:"",endDate:"",repeat:"",plantRef:"",plantLabel:"",gardenCategory:""};
@@ -777,7 +768,28 @@ function TaskManager({tasks,setTasks,plants,bulbs,trees,pondPlants,veggies}){
   function openEdit(t){setForm({...t});setEditId(t.id);setGardenCategory(t.gardenCategory||"");setStep("form");setShowForm(true);}
   function save(){if(!form.title.trim())return;const t={...form,gardenCategory,plantLabel:getLabel(form.plantRef)};if(editId)setTasks(p=>p.map(x=>x.id===editId?t:x));else setTasks(p=>[...p,t]);setShowForm(false);}
   function del(id){setTasks(p=>p.filter(t=>t.id!==id));}
+  function undoCompletion(taskId){setCompletions(prev=>prev.filter(c=>c.taskId!==taskId));}
+
   const flt=tasks.filter(t=>{const q=search.toLowerCase();return!q||t.title?.toLowerCase().includes(q)||t.category?.toLowerCase().includes(q)||t.plantLabel?.toLowerCase().includes(q);});
+
+  // Completed tasks: one entry per unique taskId, sorted newest first
+  const completedMap=new Map();
+  [...completions]
+    .filter(c=>!c.deleted)
+    .sort((a,b)=>b.completedAt?.localeCompare(a.completedAt))
+    .forEach(c=>{if(!completedMap.has(c.taskId))completedMap.set(c.taskId,c);});
+  const completedEntries=[...completedMap.values()];
+
+  // Resolve a task name from a completion entry (may be manual task or auto)
+  function resolveTaskName(c){
+    const t=tasks.find(x=>x.id===c.taskId);
+    if(t) return t.title;
+    // auto-task ids: seed-X-zaai, bulb-X-plant, plant-X-dh-M
+    if(c.taskId?.startsWith("seed-"))return"Zaai taak";
+    if(c.taskId?.startsWith("bulb-"))return"Bol plantentaak";
+    if(c.taskId?.startsWith("plant-"))return"Deadheading taak";
+    return c.taskId||"Taak";
+  }
 
   function exportTasks(){exportToExcel("Taken",["Naam","Beschrijving","Categorie","Plant","Startdatum","Einddatum","Herhaling"],tasks.map(t=>[t.title,t.description||"",t.category||"",t.plantLabel||"",t.startDate||"",t.endDate||"",t.repeat||""]),"Taken_export");}
 
@@ -789,10 +801,23 @@ function TaskManager({tasks,setTasks,plants,bulbs,trees,pondPlants,veggies}){
   ];
 
   return(<div>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h2 style={{margin:0,fontSize:22,color:K.text}}>Takenbeheer</h2><div style={{display:"flex",gap:8}}><ExportBtn onClick={exportTasks} label="Excel"/><Button onClick={openNew}><Icons.plus size={14}/>Nieuwe taak</Button></div></div>
+    {/* ── SECTIE 1: AANGEMAAKTE TAKEN ── */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <h2 style={{margin:0,fontSize:22,color:K.text}}>Takenbeheer</h2>
+      <div style={{display:"flex",gap:8}}><ExportBtn onClick={exportTasks} label="Excel"/><Button onClick={openNew}><Icons.plus size={14}/>Nieuwe taak</Button></div>
+    </div>
+
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+      <div style={{height:3,width:20,borderRadius:2,background:K.accent}}/>
+      <h3 style={{margin:0,fontSize:15,fontWeight:700,color:K.accentDark,letterSpacing:.3}}>Aangemaakte taken</h3>
+      <div style={{flex:1,height:1,background:K.border}}/>
+      <span style={{fontSize:11,color:K.muted,fontWeight:600}}>{flt.length} tak{flt.length===1?"":"en"}</span>
+    </div>
+
     <SearchBar value={search} onChange={setSearch} placeholder="Zoek taken..."/>
-    {flt.length===0?<Card><EmptyState icon={<Icons.tasks size={32}/>} title="Geen taken" sub="Maak een nieuwe taak."/></Card>:
-      flt.map(t=><Card key={t.id}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+    {flt.length===0
+      ?<Card><EmptyState icon={<Icons.tasks size={32}/>} title="Geen taken" sub="Maak een nieuwe taak."/></Card>
+      :flt.map(t=><Card key={t.id}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
         <div style={{flex:1}}>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>{t.category&&<Badge>{t.category}</Badge>}{t.gardenCategory&&<Badge color={t.gardenCategory==="bomen"?K.tree:t.gardenCategory==="vijver"?K.pond:t.gardenCategory==="moestuin"?K.veggie:K.accent} bg={t.gardenCategory==="bomen"?K.treeL:t.gardenCategory==="vijver"?K.pondL:t.gardenCategory==="moestuin"?K.veggieL:K.accentLight}>{GARDEN_CATS.find(g=>g.value===t.gardenCategory)?.label||t.gardenCategory}</Badge>}{t.startDate&&<Badge color={K.accent} bg={K.accentLight}>Gepland</Badge>}{t.repeat&&<Badge color={K.warm} bg={K.warmLight}>{t.repeat}</Badge>}{t.plantLabel&&<Badge color={K.bulb} bg={K.bulbL}>{t.plantLabel}</Badge>}</div>
           <div style={{fontSize:15,fontWeight:600,marginBottom:2}}>{t.title}</div>
@@ -800,7 +825,50 @@ function TaskManager({tasks,setTasks,plants,bulbs,trees,pondPlants,veggies}){
           <div style={{fontSize:12,color:K.muted,marginTop:4}}>{t.startDate&&<span>Start: {formatDate(t.startDate)}</span>}{t.endDate&&<span> — Einde: {formatDate(t.endDate)}</span>}</div>
         </div>
         <div style={{display:"flex",gap:4}}><Button small variant="ghost" onClick={()=>openEdit(t)}><Icons.edit/></Button><Button small variant="ghost" onClick={()=>del(t.id)} style={{color:K.danger}}><Icons.trash/></Button></div>
-      </div></Card>)}
+      </div></Card>)
+    }
+
+    {/* ── SECTIE 2: VOLBRACHTE TAKEN ── */}
+    <div style={{display:"flex",alignItems:"center",gap:8,marginTop:28,marginBottom:12}}>
+      <div style={{height:3,width:20,borderRadius:2,background:"#5a7a3a"}}/>
+      <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"#5a7a3a",letterSpacing:.3}}>Volbrachte taken</h3>
+      <div style={{flex:1,height:1,background:K.border}}/>
+      <span style={{fontSize:11,color:K.muted,fontWeight:600}}>{completedEntries.length} volbracht</span>
+    </div>
+
+    {completedEntries.length===0
+      ?<Card style={{background:"#f8f6f0"}}><EmptyState icon={<Icons.check size={28} color="#5a7a3a"/>} title="Nog geen voltooide taken" sub="Taken die je op het dashboard afvinkt verschijnen hier."/></Card>
+      :completedEntries.map(c=>{
+        const taskName=resolveTaskName(c);
+        const origTask=tasks.find(x=>x.id===c.taskId);
+        const completedDate=c.completedAt?new Date(c.completedAt):null;
+        const dateStr=completedDate
+          ?`${completedDate.getDate()} ${MONTH_SHORT[completedDate.getMonth()]} ${completedDate.getFullYear()}`
+          :(c.date||"");
+        return(
+          <Card key={c.taskId} style={{borderLeft:`3px solid #5a7a3a`,background:"#f8faf6"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4,alignItems:"center"}}>
+                  <span style={{fontSize:13,color:"#5a7a3a",fontWeight:700}}>✓ Voltooid</span>
+                  {origTask?.category&&<Badge>{origTask.category}</Badge>}
+                  {origTask?.plantLabel&&<Badge color={K.bulb} bg={K.bulbL}>{origTask.plantLabel}</Badge>}
+                </div>
+                <div style={{fontSize:15,fontWeight:600,marginBottom:2,color:K.text}}>{taskName}</div>
+                {c.note&&c.note!=="Verwijderd"&&<div style={{fontSize:13,color:K.muted,fontStyle:"italic",marginTop:2}}>"{c.note}"</div>}
+                <div style={{fontSize:12,color:K.muted,marginTop:4}}>Afgevinkt op {dateStr}</div>
+              </div>
+              <button
+                onClick={()=>undoCompletion(c.taskId)}
+                title="Markeer als niet voltooid"
+                style={{padding:"5px 10px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:11,cursor:"pointer",color:K.muted,fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}
+              >↩ Ongedaan</button>
+            </div>
+          </Card>
+        );
+      })
+    }
+
     <Modal open={showForm} onClose={()=>setShowForm(false)} title={editId?"Taak bewerken":"Nieuwe taak"}>
       {step==="cat"&&!editId&&<div>
         <p style={{fontSize:14,color:K.muted,marginBottom:16}}>Voor welk deel van de tuin is deze taak?</p>
@@ -849,6 +917,7 @@ const PLANT_FIELDS=[
   {key:"bloeiEind",label:"Bloei eind (maand)",type:"select",options:["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"]},
   {key:"kleur",label:"Bloeikleur",placeholder:"Bijv. Wit/roze"},
   {key:"inheems",label:"Inheems",type:"select",options:["Ja","Nee","Nee (wel ingeburgerd)"]},
+  {key:"invasief",label:"Invasief risico",type:"select",options:["Nee","Matig","Hoog"]},
   {key:"droogte",label:"Droogtetolerantie",placeholder:"Bijv. Ja / Nee / een beetje"},
   {key:"dracht",label:"Drachtplant (bestuivers)",placeholder:"Bijv. Ja, bijen/vlinders"},
   {key:"geur",label:"Geur",placeholder:"Bijv. Ja, sterk / Nee"},
@@ -874,7 +943,7 @@ Rapporteer EERSTE en LAATSTE ingevulde maand.
 - "Mellifère"/"Honingrijk" = drachtplant
 
 Geef JSON (alleen JSON, GEEN markdown backticks):
-{"naam":"Nederlandse naam","latijn":"Latijnse naam","type":"Vaste plant/Tweejarige/Eenjarige/Boom-struik/Struik/siergras/kruid/halfheester/bodembedekker - Vivace=Vaste plant!","licht":"Zon/Zon-Halfzon/Halfzon/Halfzon-Schaduw/Schaduw","hoogte":"cm","breedte":"cm","bloeiStart":"EERSTE maand met ingevuld rondje bloeirij, volledige NL naam","bloeiEind":"LAATSTE maand met ingevuld rondje bloeirij, volledige NL naam","kleur":"bloeikleur","inheems":"Ja/Nee/Nee (wel ingeburgerd)","droogte":"tolerantie","dracht":"bestuivers info - kijk naar mellifère/honingrijk","geur":"Ja/Nee + beschrijving","eetbaar":"Ja/Nee + welk deel","bessen":"Ja/Nee","perM2":"per m2 of Solitair","snoeien":"wanneer en hoe","oogsten":"wanneer"}
+{"naam":"Nederlandse naam","latijn":"Latijnse naam","type":"Vaste plant/Tweejarige/Eenjarige/Boom-struik/Struik/siergras/kruid/halfheester/bodembedekker - Vivace=Vaste plant!","licht":"Zon/Zon-Halfzon/Halfzon/Halfzon-Schaduw/Schaduw","hoogte":"cm","breedte":"cm","bloeiStart":"EERSTE maand met ingevuld rondje bloeirij, volledige NL naam","bloeiEind":"LAATSTE maand met ingevuld rondje bloeirij, volledige NL naam","kleur":"bloeikleur","inheems":"Ja/Nee/Nee (wel ingeburgerd)","invasief":"Nee/Matig/Hoog (kan woekeren/verwilderen)","droogte":"tolerantie","dracht":"bestuivers info - kijk naar mellifère/honingrijk","geur":"Ja/Nee + beschrijving","eetbaar":"Ja/Nee + welk deel","bessen":"Ja/Nee","perM2":"per m2 of Solitair","snoeien":"wanneer en hoe","oogsten":"wanneer"}
 Combineer foto-info MET eigen kennis over de soort.`;
 
 function PlantTab({plants,setPlants,bulbs,setBulbs,tasks,setTasks,onAfterAdd,hueCenter,hueWidth}){
@@ -1185,6 +1254,7 @@ const TREE_FIELDS=[
   {key:"bloeiEind",label:"Bloei eind",type:"select",options:["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"]},
   {key:"kleur",label:"Bloeikleur/siereigenschap",placeholder:"Bijv. Wit, herfstkleur oranje"},
   {key:"inheems",label:"Inheems",type:"select",options:["Ja","Nee","Nee (wel ingeburgerd)"]},
+  {key:"invasief",label:"Invasief risico",type:"select",options:["Nee","Matig","Hoog"]},
   {key:"winterhard",label:"Winterhard",type:"select",options:["Ja","Nee","Beperkt"]},
   {key:"dracht",label:"Drachtplant",placeholder:"Bijv. Ja, bijen/vlinders"},
   {key:"bessen",label:"Bessen/vruchten",placeholder:"Bijv. Ja, eikel / Nee"},
@@ -1625,10 +1695,11 @@ function InventarisTab({plants,setPlants,bulbs,setBulbs,trees,setTrees,pondPlant
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BLOEIKALENDER TAB — line chart day 1-365, one line per species
+// BLOEIKALENDER TAB — line chart + maandanalyse + tuinhoek-analyse
 // ═══════════════════════════════════════════════════════════════════
-const MONTH_STARTS=[0,31,59,90,120,151,181,212,243,273,304,334]; // day-of-year for Jan..Dec (non-leap)
+const MONTH_STARTS=[0,31,59,90,120,151,181,212,243,273,304,334];
 const MONTH_LABELS=["Jan","Feb","Mrt","Apr","Mei","Jun","Jul","Aug","Sep","Okt","Nov","Dec"];
+const MONTH_FULL=["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
 
 function dayOfYear(monthIdx){ return MONTH_STARTS[monthIdx]??0; }
 function getMonthIdx(name){
@@ -1637,51 +1708,47 @@ function getMonthIdx(name){
   return MAP[n]??-1;
 }
 
-// Build a smooth bell-curve path for a blooming species
-// rises from startDay to peak at mid, falls back to endDay
 function bloomPath(startDay, endDay, yMax, yBase, W, H){
   if(startDay<0||endDay<0||startDay>endDay) return null;
   const mid=(startDay+endDay)/2;
-  // sample points
   const pts=[];
-  const pad=10; // ramp-up/down in days
-  // before bloom
+  const pad=10;
   pts.push([startDay-pad, yBase]);
   pts.push([startDay, yBase]);
-  // rise
   pts.push([(startDay+mid)/2, yBase+(yMax-yBase)*0.5]);
-  // peak
   pts.push([mid, yMax]);
-  // fall
   pts.push([(mid+endDay)/2, yBase+(yMax-yBase)*0.5]);
   pts.push([endDay, yBase]);
   pts.push([endDay+pad, yBase]);
-
   const xScale=(d)=>Math.max(0,Math.min(W, (d/365)*W));
-  const yScale=(y)=>y; // already in SVG coords
-
-  let d=`M ${xScale(pts[0][0])} ${yScale(pts[0][1])}`;
+  let d=`M ${xScale(pts[0][0])} ${pts[0][1]}`;
   for(let i=1;i<pts.length;i++){
     const prev=pts[i-1], cur=pts[i];
     const cpx=(xScale(prev[0])+xScale(cur[0]))/2;
-    d+=` C ${cpx} ${yScale(prev[1])}, ${cpx} ${yScale(cur[1])}, ${xScale(cur[0])} ${yScale(cur[1])}`;
+    d+=` C ${cpx} ${prev[1]}, ${cpx} ${cur[1]}, ${xScale(cur[0])} ${cur[1]}`;
   }
   return d;
 }
 
-// Nice colors for lines
 const LINE_COLORS=["#2E5A3D","#C4703A","#6B4A8A","#1A6A8A","#8A2A5A","#5A7A1A","#8A6A1A","#1A4A6A","#6A1A3A","#3A6A1A","#8A3A1A","#3A1A6A","#1A8A6A","#6A3A8A","#8A1A2A","#2A8A4A"];
 
-function BloeikalenderTab({plants,bulbs,trees,pondPlants,veggies}){
+function BloeikalenderTab({plants,bulbs,trees,pondPlants,veggies,gardenMap}){
   const [hovered,setHovered]=useState(null);
   const [tooltip,setTooltip]=useState(null);
+  const [activeView,setActiveView]=useState("kalender"); // "kalender" | "analyse"
+  const [analysisRun,setAnalysisRun]=useState(false);
 
-  // Gather all species with bloom data from all collections
+  // Gather all species with bloom data
   const allSpecies=[];
   const addSpecies=(arr,label)=>(arr||[]).forEach(p=>{
     const si=getMonthIdx(p.bloeiStart), ei=getMonthIdx(p.bloeiEind);
     if(si<0||ei<0) return;
-    allSpecies.push({id:`${label}-${p.id}`,naam:p.naam||p.latijn||"Onbekend",startDay:dayOfYear(si),endDay:dayOfYear(ei)+30,label});
+    allSpecies.push({
+      id:`${label}-${p.id}`, plantId:p.id, naam:p.naam||p.latijn||"Onbekend",
+      startDay:dayOfYear(si), endDay:dayOfYear(ei)+30,
+      startMonth:si, endMonth:ei,
+      kleur:p.kleur||"", label
+    });
   });
   addSpecies(plants,"Sierplant");
   addSpecies(bulbs,"Bol/knol");
@@ -1689,57 +1756,120 @@ function BloeikalenderTab({plants,bulbs,trees,pondPlants,veggies}){
   addSpecies(pondPlants,"Vijver");
   addSpecies(veggies,"Moestuin");
 
-  // SVG dimensions
   const W=900, H=320, MARGIN={top:30,right:20,bottom:40,left:90};
   const chartW=W-MARGIN.left-MARGIN.right;
   const chartH=H-MARGIN.top-MARGIN.bottom;
+  const yBase=chartH, yTop=0;
 
-  // Y: 0 = geen bloei (bottom), 1 = in bloei (top)
-  const yBase=chartH; // SVG y for "geen bloei"
-  const yTop=0;       // SVG y for "in bloei"
-
-  // Build paths
   const paths=allSpecies.map((s,i)=>{
-    const color=LINE_COLORS[i%LINE_COLORS.length];
+    const color=kleurToColor(s.kleur)||LINE_COLORS[i%LINE_COLORS.length];
     const d=bloomPath(s.startDay,s.endDay,yTop,yBase,chartW,chartH);
     return{...s,color,d};
   });
 
-  // Today marker
   const now=new Date();
   const todayDoy=(function(){
     const start=new Date(now.getFullYear(),0,0);
-    const diff=now-start;
-    return Math.floor(diff/86400000);
+    return Math.floor((now-start)/86400000);
   })();
   const todayX=(todayDoy/365)*chartW;
-
-  // Currently blooming
   const blooming=paths.filter(p=>p.startDay<=todayDoy&&p.endDay>=todayDoy);
 
+  // ── ANALYSIS helpers ──────────────────────────────────────────────
+  // Count how many species bloom in each month
+  const monthBloomCount=MONTH_LABELS.map((_,mi)=>
+    allSpecies.filter(s=>s.startMonth<=mi&&s.endMonth>=mi).length
+  );
+  const maxBloom=Math.max(...monthBloomCount,1);
+
+  // Classify months
+  function bloomLevel(count){
+    if(count===0) return "geen";
+    if(count<=2) return "schaars";
+    if(count<=5) return "matig";
+    return "rijk";
+  }
+  const levelColor={geen:"#fde8e8",schaars:"#fef3cd",matig:"#d4edda",rijk:"#1F3A2A"};
+  const levelText={geen:"#8B2020",schaars:"#7a4020",matig:"#1a5a2a",rijk:"#F3EBDD"};
+  const levelLabel={geen:"Geen bloei",schaars:"Schaars",matig:"Matig",rijk:"Rijk"};
+
+  // Garden zone analysis — which pins bloom in which month
+  const pins=(gardenMap?.pins||[]);
+  const allPlantsFlat=[...(plants||[]),...(bulbs||[]),...(trees||[]),...(pondPlants||[]),...(veggies||[])];
+
+  // Determine quadrants based on actual pin positions
+  const gardenCols=gardenMap?.cols||20;
+  const gardenRows=gardenMap?.rows||16;
+  const midCol=Math.floor(gardenCols/2);
+  const midRow=Math.floor(gardenRows/2);
+
+  // For each of 4 quadrants, count blooming species per month
+  const quadrantNames=["Noord-West","Noord-Oost","Zuid-West","Zuid-Oost"];
+  const quadrantBloom=quadrantNames.map((_,qi)=>{
+    const isNorth=qi<2;
+    const isWest=qi%2===0;
+    const qPins=pins.filter(pin=>{
+      const north=pin.r<midRow, west=pin.c<midCol;
+      return isNorth===north&&isWest===west;
+    });
+    const qSpeciesIds=[...new Set(qPins.map(p=>p.plantId))];
+    const qSpecies=qSpeciesIds.map(id=>allPlantsFlat.find(p=>p.id===id)).filter(Boolean);
+    return MONTH_LABELS.map((_,mi)=>
+      qSpecies.filter(s=>{
+        const si=getMonthIdx(s.bloeiStart),ei=getMonthIdx(s.bloeiEind);
+        return si>=0&&ei>=0&&si<=mi&&ei>=mi;
+      }).length
+    );
+  });
+
+  // Gap months (< 2 species blooming)
+  const gapMonths=MONTH_LABELS.filter((_,i)=>monthBloomCount[i]<2);
+  const peakMonths=MONTH_LABELS.filter((_,i)=>monthBloomCount[i]===maxBloom);
+
+  // Quadrant gaps: quadrant × months with 0 bloei
+  const quadrantGaps=quadrantNames.map((name,qi)=>{
+    const emptyMonths=MONTH_LABELS.filter((_,mi)=>quadrantBloom[qi][mi]===0&&pins.filter(p=>(qi<2?p.r<midRow:p.r>=midRow)&&(qi%2===0?p.c<midCol:p.c>=midCol)).length>0);
+    const pinCount=pins.filter(p=>{
+      const isNorth=qi<2, isWest=qi%2===0;
+      return (isNorth?p.r<midRow:p.r>=midRow)&&(isWest?p.c<midCol:p.c>=midCol);
+    }).length;
+    return{name,emptyMonths,pinCount,monthly:quadrantBloom[qi]};
+  }).filter(q=>q.pinCount>0);
+
   return(<div>
-    <div style={{marginBottom:16}}>
-      <h2 style={{margin:0,fontSize:22,color:K.text}}>Bloeikalender</h2>
-      <p style={{margin:"4px 0 0",fontSize:13,color:K.muted}}>{allSpecies.length} soorten met bloeigegevens{blooming.length>0?` · ${blooming.length} nu in bloei`:""}</p>
+    {/* Header with tab switcher */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:8}}>
+      <div>
+        <h2 style={{margin:0,fontSize:22,color:K.text}}>Bloeikalender & analyse</h2>
+        <p style={{margin:"4px 0 0",fontSize:13,color:K.muted}}>{allSpecies.length} soorten met bloeigegevens{blooming.length>0?` · ${blooming.length} nu in bloei`:""}</p>
+      </div>
+      <div style={{display:"flex",gap:6,background:"#fff",border:`1px solid ${K.border}`,borderRadius:10,padding:3}}>
+        {[["kalender","📅 Kalender"],["analyse","🔍 Bloeianalyse"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setActiveView(v)} style={{
+            padding:"7px 14px",borderRadius:7,border:"none",cursor:"pointer",
+            background:activeView===v?K.accent:"transparent",
+            color:activeView===v?"#F3EBDD":K.muted,
+            fontSize:12,fontWeight:activeView===v?700:500,
+            fontFamily:"inherit",transition:"all .15s"
+          }}>{l}</button>
+        ))}
+      </div>
     </div>
 
     {allSpecies.length===0&&<Card><EmptyState icon={<Icons.flower size={32} color={K.accent}/>} title="Nog geen soorten met bloeigegevens" sub="Voeg planten toe met een bloeiperiode om ze hier te zien."/></Card>}
 
-    {allSpecies.length>0&&<>
-      {/* Currently blooming */}
+    {/* ═══ KALENDER VIEW ═══ */}
+    {activeView==="kalender"&&allSpecies.length>0&&<>
       {blooming.length>0&&<Card style={{marginBottom:16,borderLeft:`3px solid ${K.accent}`}}>
         <div style={{fontSize:12,fontWeight:700,color:K.accent,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>🌸 Nu in bloei</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {blooming.map(b=><span key={b.id} style={{padding:"3px 10px",borderRadius:12,fontSize:12,fontWeight:600,color:"#fff",background:b.color}}>{b.naam}</span>)}
+          {blooming.map(b=><span key={b.id} style={{padding:"3px 10px",borderRadius:12,fontSize:12,fontWeight:600,color:"#fff",background:b.color,textShadow:"0 1px 2px rgba(0,0,0,.3)"}}>{b.naam}</span>)}
         </div>
       </Card>}
 
-      {/* SVG chart */}
       <Card style={{padding:"12px 8px",overflowX:"auto"}}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",minWidth:360,display:"block"}}>
           <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-
-            {/* Grid lines + month labels */}
             {MONTH_STARTS.map((d,i)=>{
               const x=(d/365)*chartW;
               return(<g key={i}>
@@ -1747,47 +1877,30 @@ function BloeikalenderTab({plants,bulbs,trees,pondPlants,veggies}){
                 <text x={x+2} y={chartH+14} fontSize={9} fill="#999" fontFamily="-apple-system,sans-serif">{MONTH_LABELS[i]}</text>
               </g>);
             })}
-            {/* End tick */}
             <line x1={chartW} y1={0} x2={chartW} y2={chartH} stroke="#E8DCC8" strokeWidth={1}/>
-
-            {/* Y axis labels */}
             <text x={-8} y={chartH} fontSize={10} fill="#666" textAnchor="end" fontFamily="-apple-system,sans-serif" dominantBaseline="middle">Geen bloei</text>
             <text x={-8} y={0} fontSize={10} fill="#2E5A3D" textAnchor="end" fontFamily="-apple-system,sans-serif" dominantBaseline="middle" fontWeight="600">In bloei</text>
-            {/* Y axis line */}
             <line x1={0} y1={0} x2={0} y2={chartH} stroke="#E8DCC8" strokeWidth={1.5}/>
-            {/* X axis line */}
             <line x1={0} y1={chartH} x2={chartW} y2={chartH} stroke="#E8DCC8" strokeWidth={1.5}/>
-
-            {/* Bloom lines */}
             {paths.map((p)=>(
-              <path
-                key={p.id}
-                d={p.d}
-                fill="none"
-                stroke={p.color}
+              <path key={p.id} d={p.d} fill="none" stroke={p.color}
                 strokeWidth={hovered===p.id?3:1.5}
-                opacity={hovered&&hovered!==p.id?0.25:0.85}
+                opacity={hovered&&hovered!==p.id?0.2:0.85}
                 style={{cursor:"pointer",transition:"all .15s"}}
-                onMouseEnter={e=>{setHovered(p.id);setTooltip({x:e.clientX,y:e.clientY,naam:p.naam,start:MONTH_LABELS[MONTH_STARTS.findIndex((_,i)=>MONTH_STARTS[i+1]>p.startDay||i===11)],eind:MONTH_LABELS[MONTH_STARTS.findIndex((_,i)=>MONTH_STARTS[i+1]>p.endDay||i===11)],color:p.color});}}
+                onMouseEnter={e=>{setHovered(p.id);setTooltip({x:e.clientX,y:e.clientY,naam:p.naam,start:MONTH_LABELS[p.startMonth],eind:MONTH_LABELS[p.endMonth],color:p.color});}}
                 onMouseLeave={()=>{setHovered(null);setTooltip(null);}}
               />
             ))}
-
-            {/* Today vertical line */}
             <line x1={todayX} y1={0} x2={todayX} y2={chartH} stroke="#C4703A" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.7}/>
             <text x={todayX+3} y={8} fontSize={9} fill="#C4703A" fontFamily="-apple-system,sans-serif" fontWeight="600">Vandaag</text>
-
           </g>
         </svg>
-
-        {/* Tooltip */}
         {tooltip&&<div style={{position:"fixed",left:tooltip.x+12,top:tooltip.y-10,background:"#1F3A2A",color:"#F3EBDD",padding:"6px 12px",borderRadius:8,fontSize:12,fontWeight:600,pointerEvents:"none",zIndex:9999,boxShadow:"0 4px 12px rgba(0,0,0,.3)",whiteSpace:"nowrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:"50%",background:tooltip.color,flexShrink:0}}/>{tooltip.naam}</div>
           <div style={{fontSize:10,opacity:.8,marginTop:2}}>{tooltip.start} – {tooltip.eind}</div>
         </div>}
       </Card>
 
-      {/* Legend */}
       <Card style={{marginTop:12}}>
         <div style={{fontSize:11,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Legenda</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:5}}>
@@ -1801,15 +1914,209 @@ function BloeikalenderTab({plants,bulbs,trees,pondPlants,veggies}){
         </div>
       </Card>
     </>}
+
+    {/* ═══ ANALYSE VIEW ═══ */}
+    {activeView==="analyse"&&allSpecies.length>0&&<>
+
+      {/* Maand-voor-maand heatmap */}
+      <Card style={{marginBottom:16}}>
+        <div style={{fontSize:13,fontWeight:700,color:K.text,marginBottom:4}}>Bloei per maand</div>
+        <p style={{fontSize:12,color:K.muted,margin:"0 0 16px",lineHeight:1.6}}>Aantal soorten in bloei per kalendermaand — combinatie van alle categorieën.</p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:4,marginBottom:12}}>
+          {MONTH_LABELS.map((m,i)=>{
+            const count=monthBloomCount[i];
+            const level=bloomLevel(count);
+            const pct=Math.round((count/maxBloom)*100);
+            return(
+              <div key={i} style={{textAlign:"center"}}>
+                <div style={{
+                  height:Math.max(8,Math.round((count/maxBloom)*80)),
+                  background:count===0?"#f5ede8":count<=2?"#fad07a":count<=5?"#7ac472":"#2E5A3D",
+                  borderRadius:"4px 4px 0 0",marginBottom:3,
+                  transition:"height .3s",minHeight:4,
+                  boxShadow:count>0?"0 2px 6px rgba(46,90,61,.2)":"none"
+                }}/>
+                <div style={{fontSize:9,fontWeight:700,color:K.muted,marginBottom:2}}>{m}</div>
+                <div style={{fontSize:11,fontWeight:700,color:count===0?K.danger:K.accent}}>{count}</div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Legend bar */}
+        <div style={{display:"flex",gap:12,fontSize:11,color:K.muted,flexWrap:"wrap"}}>
+          {[["#f5ede8",K.danger,"0 soorten"],["#fad07a","#7a4020","1–2 soorten"],["#7ac472","#1a5a2a","3–5 soorten"],["#2E5A3D","#F3EBDD","6+ soorten"]].map(([bg,col,lbl])=>(
+            <div key={lbl} style={{display:"flex",alignItems:"center",gap:5}}>
+              <span style={{width:12,height:12,borderRadius:3,background:bg,border:"1px solid rgba(0,0,0,.08)",flexShrink:0}}/>
+              <span style={{color:col}}>{lbl}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Per-maand detail tabel */}
+      <Card style={{marginBottom:16}}>
+        <div style={{fontSize:13,fontWeight:700,color:K.text,marginBottom:12}}>Detail per maand</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {MONTH_LABELS.map((m,mi)=>{
+            const bloeiend=allSpecies.filter(s=>s.startMonth<=mi&&s.endMonth>=mi);
+            const level=bloomLevel(bloeiend.length);
+            return(
+              <div key={mi} style={{display:"grid",gridTemplateColumns:"60px 80px 1fr",gap:8,alignItems:"start",padding:"7px 10px",borderRadius:8,background:level==="geen"?"#fff5f5":level==="schaars"?"#fffbf0":"#f6fdf4",border:`1px solid ${level==="geen"?"#fdc8c8":level==="schaars"?"#fde8a0":"#c8eac8"}`}}>
+                <div style={{fontSize:13,fontWeight:700,color:K.text}}>{m}</div>
+                <div>
+                  <span style={{
+                    display:"inline-block",padding:"2px 8px",borderRadius:12,fontSize:10,fontWeight:700,
+                    background:levelColor[level],color:levelText[level]
+                  }}>{levelLabel[level]}</span>
+                </div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {bloeiend.length===0
+                    ?<span style={{fontSize:11,color:K.danger,fontStyle:"italic"}}>Geen enkele soort in bloei</span>
+                    :bloeiend.map(s=>{
+                      const c=kleurToColor(s.kleur)||LINE_COLORS[0];
+                      return <span key={s.id} style={{fontSize:10,padding:"1px 7px",borderRadius:10,background:c,color:"#fff",fontWeight:600,textShadow:"0 1px 2px rgba(0,0,0,.3)"}}>{s.naam}</span>;
+                    })
+                  }
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Tuinhoek analyse (alleen als er pins zijn) */}
+      {pins.length>0&&quadrantGaps.length>0&&<Card style={{marginBottom:16}}>
+        <div style={{fontSize:13,fontWeight:700,color:K.text,marginBottom:4}}>Bloei per tuinhoek</div>
+        <p style={{fontSize:12,color:K.muted,margin:"0 0 14px",lineHeight:1.6}}>Gebaseerd op de pins in je plattegrond — hoeveel gepinde soorten bloeien er per kwartaal per maand?</p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:8}}>
+          {quadrantGaps.map((q,qi)=>{
+            const maxQ=Math.max(...q.monthly,1);
+            return(
+              <div key={q.name} style={{border:`1px solid ${K.border}`,borderRadius:10,padding:12,background:"#fff"}}>
+                <div style={{fontSize:12,fontWeight:700,color:K.accentDark,marginBottom:8}}>🧭 {q.name}</div>
+                <div style={{display:"flex",gap:2,alignItems:"flex-end",height:40,marginBottom:6}}>
+                  {q.monthly.map((cnt,mi)=>(
+                    <div key={mi} title={`${MONTH_FULL[mi]}: ${cnt} soorten`} style={{
+                      flex:1,
+                      height:cnt===0?3:Math.max(4,Math.round((cnt/maxQ)*38)),
+                      background:cnt===0?"#f5ede8":cnt<=1?"#fad07a":cnt<=3?"#7ac472":"#2E5A3D",
+                      borderRadius:"2px 2px 0 0",cursor:"pointer"
+                    }}/>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:2,marginBottom:6}}>
+                  {q.monthly.map((_,mi)=>(
+                    <div key={mi} style={{flex:1,fontSize:7,color:K.muted,textAlign:"center"}}>{MONTH_LABELS[mi][0]}</div>
+                  ))}
+                </div>
+                {q.emptyMonths.length>0&&<div style={{fontSize:11,color:K.danger,marginTop:4}}>
+                  <strong>Gaten:</strong> {q.emptyMonths.join(", ")}
+                </div>}
+                {q.emptyMonths.length===0&&<div style={{fontSize:11,color:"#2a7a2a"}}>✓ Doorlopende bloei</div>}
+                <div style={{fontSize:10,color:K.muted,marginTop:4}}>{q.pinCount} pin{q.pinCount!==1?"s":""} in dit kwartaal</div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>}
+
+      {/* SUGGESTIES */}
+      <Card style={{borderLeft:`3px solid ${K.accent}`,background:"#F6FDF6"}}>
+        <div style={{fontSize:13,fontWeight:700,color:K.accentDark,marginBottom:12}}>💡 Suggesties voor betere spreiding</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+
+          {/* Gap months */}
+          {gapMonths.length>0&&<div style={{padding:"10px 14px",borderRadius:8,background:"#fff3cd",border:"1px solid #fde8a0"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#7a4020",marginBottom:4}}>⚠️ Maanden met weinig of geen bloei</div>
+            <div style={{fontSize:13,color:"#5a3010",marginBottom:6}}><strong>{gapMonths.join(", ")}</strong> hebben minder dan 2 soorten in bloei.</div>
+            {gapMonths.map(m=>{
+              const mi=MONTH_LABELS.indexOf(m);
+              const suggestions=[];
+              if(mi<=1||mi>=10) suggestions.push("Sneeuwklokjes (Galanthus), Krokus, Helleborus, Winterakoniet");
+              else if(mi<=3) suggestions.push("Muscari, Doronicum, Primula, Pulmonaria, Bergenia");
+              else if(mi<=4) suggestions.push("Geranium macrorrhizum, Baptisia, Camassia, Allium");
+              else if(mi>=8) suggestions.push("Anemone hupehensis, Aster, Sedum, Cyclamen hederifolium");
+              else suggestions.push("Echinacea, Helenium, Agastache, Penstemon");
+              return <div key={m} style={{fontSize:12,color:K.muted,marginTop:3}}>→ {MONTH_FULL[mi]}: overweeg {suggestions[0]}</div>;
+            })}
+          </div>}
+
+          {/* Peak months info */}
+          {peakMonths.length>0&&<div style={{padding:"10px 14px",borderRadius:8,background:"#d4edda",border:"1px solid #b8dfc4"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#1a5a2a",marginBottom:4}}>🌸 Bloei-hoogtepunt</div>
+            <div style={{fontSize:13,color:"#1a4020"}}><strong>{peakMonths.join(", ")}</strong> {peakMonths.length===1?"is de":"zijn de"} rijkste bloeimaand{peakMonths.length!==1?"en":""} met {maxBloom} soorten tegelijk.</div>
+          </div>}
+
+          {/* Quadrant gaps */}
+          {quadrantGaps.filter(q=>q.emptyMonths.length>0).map(q=>(
+            <div key={q.name} style={{padding:"10px 14px",borderRadius:8,background:"#f8f0ff",border:"1px solid #e0c8f0"}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#5a2a8a",marginBottom:4}}>📍 {q.name} — bloeilacune</div>
+              <div style={{fontSize:13,color:"#3a1a6a",marginBottom:4}}>
+                In de hoek <strong>{q.name}</strong> is geen bloeiende beplanting gepind in: <strong>{q.emptyMonths.join(", ")}</strong>.
+              </div>
+              <div style={{fontSize:12,color:K.muted}}>Tip: voeg een pin toe voor een soort die in {q.emptyMonths.slice(0,2).join(" of ")} bloeit — bijv. {(() => {
+                const mi=MONTH_LABELS.indexOf(q.emptyMonths[0]);
+                if(mi<=1||mi>=10) return "Helleborus of Krokus";
+                if(mi<=3) return "Muscari of Bergenia";
+                if(mi<=5) return "Salvia nemorosa of Geranium";
+                if(mi<=8) return "Echinacea of Helenium";
+                return "Aster of Sedum";
+              })()}</div>
+            </div>
+          ))}
+
+          {/* No gaps — positive feedback */}
+          {gapMonths.length===0&&quadrantGaps.filter(q=>q.emptyMonths.length>0).length===0&&<div style={{padding:"10px 14px",borderRadius:8,background:"#d4edda",border:"1px solid #b8dfc4"}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#1a5a2a"}}>🎉 Uitstekende bloeispreiding!</div>
+            <div style={{fontSize:12,color:"#2a6a3a",marginTop:4}}>Elke maand heeft minimaal 2 soorten in bloei en alle ingetekende tuinhoeken hebben doorlopende bloei. Goed gedaan!</div>
+          </div>}
+
+        </div>
+      </Card>
+
+    </>}
+
+    {/* No data state for analyse */}
+    {activeView==="analyse"&&allSpecies.length===0&&<Card>
+      <EmptyState icon={<Icons.flower size={32} color={K.accent}/>} title="Geen bloeigegevens beschikbaar" sub="Voeg planten met bloeiperiode toe om de analyse te zien."/>
+    </Card>}
+
   </div>);
 }
+
 
 
 // ═══════════════════════════════════════════════════════════════════
 // PLATTEGROND TAB — phase 1: draw outline | phase 2: fill grid + pins
 // ═══════════════════════════════════════════════════════════════════
 
-function plantPinColor(id){
+function kleurToColor(kleur){
+  if(!kleur) return "#2E5A3D";
+  const k=kleur.toLowerCase();
+  if(k.includes("wit")&&!k.includes("roze")&&!k.includes("geel")&&!k.includes("crème")) return "#f0ede6";
+  if(k.includes("crème")||k.includes("creme")) return "#e8d5a0";
+  if(k.includes("geel")) return "#f5c518";
+  if(k.includes("oranje")&&!k.includes("rood")) return "#f07820";
+  if(k.includes("vuurrood")||k.includes("donkerrood")) return "#c0202a";
+  if(k.includes("rood")&&!k.includes("roze")) return "#e03030";
+  if(k.includes("chocolade")||k.includes("bruin")) return "#7a4020";
+  if(k.includes("roze-paars")||k.includes("rose-paars")) return "#c060a0";
+  if(k.includes("roze")&&!k.includes("paars")) return "#f070a0";
+  if(k.includes("lila")) return "#b070d0";
+  if(k.includes("violet-blauw")||k.includes("violet")) return "#6040c0";
+  if(k.includes("staalblauw")||k.includes("staal")) return "#4070a8";
+  if(k.includes("blauw-paars")||k.includes("blauw/paars")) return "#5060c0";
+  if(k.includes("blauw")) return "#3080d0";
+  if(k.includes("lavendel")) return "#9090e0";
+  if(k.includes("paars/wit")||k.includes("paars/roze")||k.includes("blauw/paars/wit")) return "#8050b0";
+  if(k.includes("paars")) return "#8040b0";
+  if(k.includes("geelgroen")) return "#80b030";
+  if(k.includes("beige")) return "#c8a870";
+  if(k.includes("donkerpaars/zwart")||k.includes("zwart")) return "#3a1848";
+  return "#2E5A3D";
+}
+function plantPinColor(id, kleur){
+  if(kleur) return kleurToColor(kleur);
   const P=["#E74C3C","#2ECC71","#3498DB","#F39C12","#9B59B6","#1ABC9C","#E67E22",
            "#E91E63","#00BCD4","#8BC34A","#FF5722","#607D8B","#795548","#FF9800",
            "#4CAF50","#2196F3","#9C27B0","#009688","#CDDC39","#FF5252"];
@@ -2932,6 +3239,238 @@ const INITIAL_TASKS=[
   {id:"d5",title:"Eerste bemesting",description:"Organische mest rond vaste planten",category:"Bemesten",startDate:"2026-03-15",endDate:"2026-04-15",repeat:"jaarlijks",plantRef:"groep:Alle vaste planten",plantLabel:"Alle vaste planten",gardenCategory:"sierplanten"},
 ];
 
+
+// ═══════════════════════════════════════════════════════════════════
+// TOUR OVERLAY
+// ═══════════════════════════════════════════════════════════════════
+const TOUR_STEPS = [
+  {
+    tabIndex: -1, // welcome screen, no tab switch
+    title: "Welkom bij TuinRegister 🌱",
+    body: "Je krijgt een korte rondleiding langs alle onderdelen. Klik op Volgende om te beginnen, of Overslaan om direct te starten.",
+    targetId: null,
+    arrowDir: null,
+    wide: true,
+  },
+  {
+    tabIndex: 0,
+    title: "Dashboard — jouw startpunt",
+    body: "Het dashboard toont alles wat er nu speelt: welke taken er liggen, welke planten bloeien de komende weken, en wat er vandaag of deze week aandacht nodig heeft.",
+    targetId: "tab-btn-0",
+    arrowDir: "up",
+  },
+  {
+    tabIndex: 1,
+    title: "Plattegrond — teken je tuin",
+    body: "Geef hier de afmetingen op en teken de omtrek van je tuin. Kleur zones in (zon, schaduw, gazon, water) en pin je planten op de exacte plek — op een raster van 0,5 × 0,5 meter.",
+    targetId: "tab-btn-1",
+    arrowDir: "up",
+  },
+  {
+    tabIndex: 2,
+    title: "Inventaris — al je planten",
+    body: "Voeg vaste planten, bollen, bomen, vijverplanten, moestuingewassen en zaden toe. Gebruik de AI-scan om een foto van een etiket of zadenzakje te maken — Claude vult alle velden automatisch in.",
+    targetId: "tab-btn-2",
+    arrowDir: "up",
+  },
+  {
+    tabIndex: 3,
+    title: "Bloei & Analyse — kalender + bloeianalyse",
+    body: "Bekijk de bloeitijdlijn van al je planten, of schakel naar de Bloeianalyse voor een diepgaand overzicht per maand: welke maanden zijn leeg, welke tuinhoeken bloeien wanneer, en concrete suggesties voor beter gespreide bloei.",
+    targetId: "tab-btn-3",
+    arrowDir: "up",
+  },
+  {
+    tabIndex: 4,
+    title: "Taken — plan je tuinwerk",
+    body: "Maak taken aan voor snoeien, zaaien, bemesten, oogsten en meer. De tab heeft twee secties: 'Aangemaakte taken' toont al je geplande taken, en 'Volbrachte taken' toont chronologisch alles wat je op het dashboard hebt afgevinkt.",
+    targetId: "tab-btn-4",
+    arrowDir: "up",
+  },
+  {
+    tabIndex: 5,
+    title: "Fotojournaal — leg je tuin vast",
+    body: "Maak vaste fotohoeken aan en fotografeer vanuit dezelfde positie. De app toont een referentiefoto zodat je altijd de juiste hoek aanhoudt. Van alle foto's wordt automatisch een timelapse gemaakt.",
+    targetId: "tab-btn-5",
+    arrowDir: "up",
+  },
+  {
+    tabIndex: 6,
+    title: "Wishlist — jouw verlanglijst",
+    body: "Zet hier planten op die je nog wilt aanschaffen. Voeg een foto, notitie en categorie toe. Vink ze af zodra je ze gevonden hebt.",
+    targetId: "tab-btn-6",
+    arrowDir: "up",
+  },
+  {
+    tabIndex: 0,
+    title: "Je bent klaar! 🎉",
+    body: "De rondleiding is afgerond. Je kunt de rondleiding altijd opnieuw starten via de knop '❓ Rondleiding' links van de Opslaan-knop bovenaan. Veel tuinplezier!",
+    targetId: null,
+    arrowDir: null,
+    wide: true,
+    isLast: true,
+  },
+];
+
+function TourOverlay({ step, total, onNext, onSkip, onClose, currentTab, setTab }) {
+  const s = TOUR_STEPS[step];
+  const [pos, setPos] = React.useState({ top: "50%", left: "50%", transform: "translate(-50%,-50%)" });
+  const [spotBox, setSpotBox] = React.useState(null);
+
+  // Switch to the right tab when step changes
+  React.useEffect(() => {
+    if (s.tabIndex >= 0 && s.tabIndex !== currentTab) {
+      setTab(s.tabIndex);
+    }
+  }, [step]);
+
+  // Calculate tooltip position from target element
+  React.useEffect(() => {
+    if (!s.targetId) {
+      setPos({ top: "50%", left: "50%", transform: "translate(-50%,-50%)" });
+      setSpotBox(null);
+      return;
+    }
+    function measure() {
+      const el = document.getElementById(s.targetId);
+      if (!el) {
+        setPos({ top: "50%", left: "50%", transform: "translate(-50%,-50%)" });
+        setSpotBox(null);
+        return;
+      }
+      const r = el.getBoundingClientRect();
+      const vw = window.innerWidth, vh = window.innerHeight;
+      setSpotBox({ left: r.left - 6, top: r.top - 6, width: r.width + 12, height: r.height + 12 });
+
+      // Place tooltip below the target
+      const tipW = Math.min(s.wide ? 380 : 320, vw - 32);
+      let tipLeft = r.left + r.width / 2 - tipW / 2;
+      tipLeft = Math.max(12, Math.min(vw - tipW - 12, tipLeft));
+      let tipTop = r.bottom + 18;
+      if (tipTop + 180 > vh) tipTop = r.top - 180 - 18;
+      setPos({ top: tipTop, left: tipLeft, transform: "none", width: tipW });
+    }
+    const t = setTimeout(measure, 80);
+    return () => clearTimeout(t);
+  }, [step, s.targetId]);
+
+  const isFirst = step === 0;
+  const isLast = !!s.isLast;
+  const progress = step / (total - 1);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9500,
+      pointerEvents: "none",
+    }}>
+      {/* Dark overlay with cutout via box-shadow trick */}
+      {spotBox ? (
+        <div style={{
+          position: "fixed",
+          left: spotBox.left, top: spotBox.top,
+          width: spotBox.width, height: spotBox.height,
+          borderRadius: 10,
+          boxShadow: "0 0 0 9999px rgba(10,25,15,0.72)",
+          pointerEvents: "none",
+          transition: "all .3s cubic-bezier(.4,0,.2,1)",
+        }} />
+      ) : (
+        <div style={{
+          position: "fixed", inset: 0,
+          background: "rgba(10,25,15,0.72)",
+          pointerEvents: "none",
+        }} />
+      )}
+
+      {/* Tooltip bubble */}
+      <div style={{
+        position: "fixed",
+        ...pos,
+        width: pos.width || (s.wide ? 380 : 320),
+        maxWidth: "calc(100vw - 24px)",
+        background: "#fff",
+        borderRadius: 16,
+        boxShadow: "0 24px 72px rgba(0,0,0,.35), 0 0 0 1px rgba(46,90,61,.12)",
+        padding: "22px 22px 18px",
+        pointerEvents: "all",
+        fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+        transition: "top .3s cubic-bezier(.4,0,.2,1), left .3s cubic-bezier(.4,0,.2,1)",
+        zIndex: 9501,
+      }}>
+        {/* Arrow pointing up to tab */}
+        {s.arrowDir === "up" && spotBox && (
+          <div style={{
+            position: "absolute",
+            top: -10, left: "50%", transform: "translateX(-50%)",
+            width: 0, height: 0,
+            borderLeft: "10px solid transparent",
+            borderRight: "10px solid transparent",
+            borderBottom: "10px solid #fff",
+            filter: "drop-shadow(0 -3px 3px rgba(0,0,0,.1))",
+          }} />
+        )}
+
+        {/* Step indicator dots */}
+        <div style={{ display: "flex", gap: 5, marginBottom: 14 }}>
+          {TOUR_STEPS.map((_, i) => (
+            <div key={i} style={{
+              height: 4, borderRadius: 2,
+              flex: i === step ? 2 : 1,
+              background: i === step ? "#2E5A3D" : i < step ? "#A8C8A8" : "#E8DCC8",
+              transition: "all .3s",
+            }} />
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: ".12em",
+          textTransform: "uppercase", color: "#2E5A3D", marginBottom: 6,
+        }}>
+          Stap {step + 1} van {total}
+        </div>
+        <h3 style={{
+          margin: "0 0 10px", fontSize: 17, fontWeight: 700,
+          color: "#1F3A2A", lineHeight: 1.25,
+        }}>{s.title}</h3>
+        <p style={{
+          margin: "0 0 18px", fontSize: 13.5, lineHeight: 1.65,
+          color: "#3a3028",
+        }}>{s.body}</p>
+
+        {/* Buttons */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {!isFirst && !isLast && (
+            <button onClick={onSkip} style={{
+              flex: 1, padding: "8px 0", border: "1px solid #E8DCC8",
+              borderRadius: 8, background: "#fff", color: "#888",
+              fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+            }}>Overslaan</button>
+          )}
+          <button onClick={isLast ? onClose : onNext} style={{
+            flex: isFirst || isLast ? "1" : "2",
+            padding: "10px 0",
+            border: "none", borderRadius: 8,
+            background: isLast ? "linear-gradient(135deg,#2E5A3D,#1F3A2A)" : "#2E5A3D",
+            color: "#F3EBDD", fontSize: 13, fontWeight: 700,
+            cursor: "pointer", fontFamily: "inherit",
+            boxShadow: "0 2px 8px rgba(46,90,61,.3)",
+          }}>
+            {isFirst ? "Rondleiding starten →" : isLast ? "Aan de slag! 🌱" : "Volgende →"}
+          </button>
+          {isFirst && (
+            <button onClick={onClose} style={{
+              flex: 1, padding: "10px 0", border: "1px solid #E8DCC8",
+              borderRadius: 8, background: "#fff", color: "#888",
+              fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+            }}>Overslaan</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CottageGardenApp(){
   const [tab,setTab]=useState(0);
   const [plants,setPlants]=useState(()=>lsGet("tr_plants",INITIAL_PLANTS));
@@ -2971,17 +3510,29 @@ function CottageGardenApp(){
     }));
   },[]);
 
-  const [showApiModal,setShowApiModal]=useState(false);
-  const [apiKeyInput,setApiKeyInput]=useState(()=>{try{return localStorage.getItem("cg_apikey")||"";}catch(e){return "";}});
-  function saveApiKey(){const k=apiKeyInput.trim();window.__CG_API_KEY=k;try{localStorage.setItem("cg_apikey",k);}catch(e){}setShowApiModal(false);}
-  React.useEffect(()=>{try{const k=localStorage.getItem("cg_apikey")||"";window.__CG_API_KEY=k;setApiKeyInput(k);}catch(e){};},[]);
-  const hasKey=!!(apiKeyInput.trim());
+
+
+  // Tour state
+  const [tourStep, setTourStep] = useState(-1); // -1 = not running
+  const [tourStarted, setTourStarted] = useState(false);
+  useEffect(()=>{
+    try{
+      const seen = localStorage.getItem('tr_tour_seen');
+      if(!seen){ setTourStep(0); setTourStarted(true); }
+    }catch(e){}
+  },[]);
+  function startTour(){ setTourStep(0); setTourStarted(true); }
+  function nextTourStep(){ setTourStep(s => s+1); }
+  function closeTour(){
+    setTourStep(-1);
+    try{ localStorage.setItem('tr_tour_seen','1'); }catch(e){}
+  }
 
   const tabs=[
     {icon:Icons.dashboard,label:"Dashboard"},
     {icon:Icons.map,label:"Plattegrond"},
     {icon:Icons.plant,label:"Inventaris"},
-    {icon:Icons.chart,label:"Bloeikalender"},
+    {icon:Icons.chart,label:"Bloei & Analyse"},
     {icon:Icons.tasks,label:"Taken"},
     {icon:Icons.camera2,label:"Journaal"},
     {icon:Icons.heart,label:"Wishlist"},
@@ -2990,48 +3541,255 @@ function CottageGardenApp(){
   // Per-tab accent colors for active state
   const tabAccents=["","#5A3A8A","","#2E7DA8","","#C4703A",K.wish];
 
+
+  // ═══ SESSIE OPSLAAN & AFSLUITEN ═══════════════════════════════════
+  // Expose executeTuinSave to window so inline onclick in injected HTML can reach it
+  function openSaveModal(){
+    const plantCount=(plants||[]).length+(bulbs||[]).length+(trees||[]).length+(pondPlants||[]).length+(veggies||[]).length+(seeds||[]).length;
+
+    // Build the comprehensive Excel workbook with ALL tabs
+    function buildExcelBlob(){
+      const wb=XLSX.utils.book_new();
+
+      function addSheet(name,headers,rows){
+        if(rows.length===0&&headers.length===0) return;
+        const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);
+        // Column widths
+        ws['!cols']=headers.map((_,i)=>{
+          let max=headers[i].length;
+          rows.forEach(r=>{if(r[i]&&String(r[i]).length>max)max=String(r[i]).length;});
+          return{wch:Math.min(max+2,45)};
+        });
+        XLSX.utils.book_append_sheet(wb,ws,name);
+      }
+
+      // 1. Sierplanten
+      addSheet('Sierplanten',
+        ['Naam','Latijn','Type','Licht','Hoogte (cm)','Breedte (cm)','Bloei start','Bloei eind','Kleur','Inheems','Droogte','Dracht','Geur','Eetbaar','Bessen','Per m²','Snoeien','Oogsten'],
+        (plants||[]).map(p=>[p.naam,p.latijn,p.type,p.licht,p.hoogte,p.breedte,p.bloeiStart,p.bloeiEind,p.kleur,p.inheems,p.droogte,p.dracht,p.geur,p.eetbaar,p.bessen,p.perM2,p.snoeien||'',p.oogsten||''].map(v=>v||''))
+      );
+
+      // 2. Bollen & knollen
+      addSheet('Bollen & Knollen',
+        ['Naam','Latijn','Type','Licht','Hoogte (cm)','Breedte (cm)','Bloei start','Bloei eind','Kleur','Plantperiode','Plantdiepte','Oprooien','Opslag','Winterhard','Bijzonderheden'],
+        (bulbs||[]).map(b=>[b.naam,b.latijn,b.type,b.licht,b.hoogte,b.breedte,b.bloeiStart,b.bloeiEind,b.kleur,b.plantPeriode,b.diepte,b.ropiePeriode,b.opslag,b.winterhard,b.bijzonderheden].map(v=>v||''))
+      );
+
+      // 3. Bomen & struiken
+      addSheet('Bomen & Struiken',
+        ['Naam','Latijn','Type','Licht','Hoogte (m)','Breedte (m)','Bloei start','Bloei eind','Kleur/Siereigenschap','Inheems','Winterhard','Dracht','Bessen/Vruchten','Snoeien','Bijzonderheden'],
+        (trees||[]).map(t=>[t.naam,t.latijn,t.type,t.licht,t.hoogte,t.breedte,t.bloeiStart,t.bloeiEind,t.kleur,t.inheems,t.winterhard,t.dracht,t.bessen,t.snoeien,t.bijzonderheden].map(v=>v||''))
+      );
+
+      // 4. Vijver
+      addSheet('Vijver',
+        ['Naam','Latijn','Type','Licht','Hoogte (cm)','Waterdiepte','Bloei start','Bloei eind','Kleur','Winterhard','Dracht','Bijzonderheden'],
+        (pondPlants||[]).map(p=>[p.naam,p.latijn,p.type,p.licht,p.hoogte,p.waterDiepte,p.bloeiStart,p.bloeiEind,p.kleur,p.winterhard,p.dracht,p.bijzonderheden].map(v=>v||''))
+      );
+
+      // 5. Moestuin
+      addSheet('Moestuin',
+        ['Naam','Latijn','Type','Licht','Hoogte (cm)','Zaai/plant start','Zaai/plant eind','Oogst start','Oogst eind','Rijafstand','Plantafstand','Zaaimethode','Grondsoort','Bemesting','Buurplanten','Bijzonderheden'],
+        (veggies||[]).map(v=>[v.naam,v.latijn,v.type,v.licht,v.hoogte,v.zaaiStart,v.zaaiEind,v.oogstStart,v.oogstEind,v['rij afstand'],v.plantAfstand,v.zaaiMethode,v.grondsoort,v.bemesting,v.combineren,v.bijzonderheden].map(x=>x||''))
+      );
+
+      // 6. Zadenbank
+      addSheet('Zadenbank',
+        ['Naam','Latijn','Soort','Zaai start','Zaai eind','Methode','Kiemsoort','Kiemtemp.','Kiemtijd','Zaaidiepte','Zaaiafstand','Standplaats','Grond','Hoogte','Breedte','Verspenen','Uitplanten','Bloei start','Bloei eind','Kleur','Oogst','Winterhard','Houdbaarheid','Leverancier','Bijzonderheden'],
+        (seeds||[]).map(s=>[s.naam,s.latijn,s.soort,s.zaaiStart,s.zaaiEind,s.zaaiMethode,s.kiemsoort,s.kiemtemperatuur,s.kiemtijd,s.zaaidiepte,s.zaaiafstand,s.standplaats,s.grondsoort,s.hoogte,s.breedte,s.verspeenMoment,s.uitplantMoment,s.bloeiStart,s.bloeiEind,s.kleur,s.oogstperiode,s.winterhard,s.houdbaarheid,s.leverancier,s.bijzonderheden].map(v=>v||''))
+      );
+
+      // 7. Taken
+      addSheet('Taken',
+        ['Naam','Beschrijving','Categorie','Tuindeel','Gekoppelde plant','Startdatum','Einddatum','Herhaling'],
+        (tasks||[]).map(t=>[t.title,t.description||'',t.category||'',t.gardenCategory||'',t.plantLabel||'',t.startDate||'',t.endDate||'',t.repeat||''])
+      );
+
+      // 8. Plattegrond – gepinde soorten
+      const pins=(gardenMap&&gardenMap.pins)||[];
+      addSheet('Plattegrond – Pins',
+        ['Plant naam','Kolom (0.5m)','Rij (0.5m)','Positie (m)','Kleur'],
+        pins.map(p=>[p.naam,p.c+1,p.r+1,`${((p.c)*0.5).toFixed(1)}m × ${((p.r)*0.5).toFixed(1)}m`,p.kleur||''])
+      );
+
+      // 9. Wishlist
+      addSheet('Verlanglijst',
+        ['Naam','Latijn','Categorie','Notitie','Status'],
+        (wishlist||[]).map(w=>[w.naam,w.latijn||'',w.categorie||'',w.notitie||'',w.done?'Verkregen':'Gewenst'])
+      );
+
+      // 10. Fotojournaal
+      addSheet('Fotojournaal',
+        ['Hoek naam','Datum','Tijdstip','Beschrijving'],
+        (journal||[]).map(e=>{
+          // We don't export the base64 photo itself, just metadata
+          const spots_data=[];
+          try{const sp=localStorage.getItem('tr_spots');if(sp){const arr=JSON.parse(sp);const spot=arr.find(s=>s.id===e.spotId);spots_data.push(spot?spot.naam:'Onbekend');}}catch(_){spots_data.push('Onbekend');}
+          return[spots_data[0]||'Onbekend',e.date||'',e.time||'','Foto opgeslagen'];
+        })
+      );
+
+      const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+      return new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    }
+
+    // Attach to window so onclick in injected HTML can call it
+    window._tuinBuildExcel = buildExcelBlob;
+    window._tuinData = {plants,bulbs,seeds,trees,pondPlants,veggies,tasks,completions,wishlist,gardenMap,journal};
+
+    window.executeTuinSave = async function(){
+      const dateStr=new Date().toISOString().split('T')[0];
+      const modal=document.getElementById('tr-save-modal');
+      const btn=document.getElementById('tr-save-btn');
+      if(btn){btn.disabled=true;btn.textContent='Bezig met opslaan...';}
+
+      try{
+        // 1. Lokaal opslaan — altijd
+        const d=window._tuinData;
+        const allData={...d,savedAt:new Date().toISOString(),version:'v45'};
+        const keys=['tr_plants','tr_bulbs','tr_seeds','tr_trees','tr_pond','tr_veggies','tr_tasks','tr_completions','tr_wishlist','tr_gardenmap','tr_journal'];
+        const vals=[d.plants,d.bulbs,d.seeds,d.trees,d.pondPlants,d.veggies,d.tasks,d.completions,d.wishlist,d.gardenMap,d.journal];
+        keys.forEach((k,i)=>{try{localStorage.setItem(k,JSON.stringify(vals[i]));}catch(e){}});
+
+        const jsonStr=JSON.stringify(allData,null,2);
+        const doEmail=document.getElementById('tr-opt-email')?.checked;
+        const emailAddr=document.getElementById('tr-email-addr')?.value?.trim();
+
+        // 2. ZIP met JSON + Excel — altijd
+        const zip=new JSZip();
+        zip.file(`TuinRegister-backup-${dateStr}.json`,jsonStr);
+        const excelBlob=window._tuinBuildExcel();
+        const excelArr=await excelBlob.arrayBuffer();
+        zip.file(`TuinRegister-inventaris-${dateStr}.xlsx`,excelArr);
+        const zipBlob=await zip.generateAsync({type:'blob'});
+        const zipUrl=URL.createObjectURL(zipBlob);
+        const zipLink=document.createElement('a');
+        zipLink.href=zipUrl; zipLink.download=`TuinRegister-${dateStr}.zip`; zipLink.click();
+        URL.revokeObjectURL(zipUrl);
+
+        // 3. E-mail (optioneel)
+        if(doEmail && emailAddr){
+          const subject=encodeURIComponent('TuinRegister backup — '+dateStr);
+          const body=encodeURIComponent('Hallo,\n\nHierbij de TuinRegister backup van '+dateStr+'.\nVoeg het gedownloade ZIP-bestand als bijlage toe.\n\nMet vriendelijke groet,\nTuinRegister');
+          window.open('mailto:'+emailAddr+'?subject='+subject+'&body='+body);
+        }
+
+        // Bevestiging
+        if(modal){
+          modal.querySelector('div').innerHTML=`
+            <div style="text-align:center;padding:32px 20px;font-family:-apple-system,sans-serif;">
+              <div style="font-size:56px;margin-bottom:12px;">✅</div>
+              <h2 style="color:#2E5A3D;margin:0 0 12px;font-size:22px;">Opgeslagen!</h2>
+              <div style="background:#f0fff4;border:1px solid #b2dfdb;padding:14px;border-radius:8px;text-align:left;margin-bottom:16px;font-size:13px;">
+                <div style="padding:3px 0;">✓ Lokaal opgeslagen in browser</div>
+                <div style="padding:3px 0;">✓ ZIP gedownload (JSON-backup + Excel met alle tabbladen)</div>
+                ${doEmail&&emailAddr?'<div style="padding:3px 0;">✓ E-mail geopend naar: '+emailAddr+'</div>':''}
+              </div>
+              <p style="font-size:12px;color:#888;margin-bottom:16px;">De ZIP bevat een volledig herstelbare JSON-backup én een Excel-bestand met een tabblad voor Sierplanten, Bollen, Bomen, Vijver, Moestuin, Zadenbank, Taken, Plattegrond, Verlanglijst en Fotojournaal.</p>
+              <button onclick="document.getElementById('tr-save-modal').remove()" style="background:#2E5A3D;color:#fff;border:none;padding:12px 28px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;width:100%;">↩ Doorgaan</button>
+            </div>
+          `;
+        }
+      }catch(err){
+        console.error('Save error:',err);
+        if(btn){btn.disabled=false;btn.textContent='✅ Opslaan & ZIP downloaden';}
+        alert('Er ging iets mis: '+err.message+'\n\nProbeer het opnieuw of controleer of downloads zijn toegestaan in je browser.');
+      }
+    };
+
+    const modal=document.createElement('div');
+    modal.className='tr-save-modal-overlay';
+    modal.id='tr-save-modal';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(13,31,20,.88);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);';
+    modal.innerHTML=`
+      <div style="background:#fff;border-radius:16px;padding:32px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.3);">
+        <div style="text-align:center;padding-bottom:16px;">
+          <div style="font-size:40px;margin-bottom:8px;">💾</div>
+          <h2 style="margin:0 0 4px;font-family:-apple-system,sans-serif;color:#1F3A2A;font-size:22px;">Opslaan & Afsluiten</h2>
+          <p style="color:#888;font-size:12px;margin:0;">${plantCount} planten & items — ${new Date().toLocaleDateString('nl-NL')}</p>
+        </div>
+
+        <div style="margin:16px 0;font-family:-apple-system,sans-serif;font-size:13px;">
+          <div style="background:#f0fff4;border:1px solid #b2dfdb;border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+            <div style="font-weight:700;color:#1F3A2A;margin-bottom:6px;">✅ Altijd inbegrepen</div>
+            <div style="padding:2px 0;color:#2E5A3D;">💾 Lokaal opslaan in browser</div>
+            <div style="padding:2px 0;color:#2E5A3D;">📦 ZIP downloaden met:</div>
+            <div style="padding:2px 0;color:#2E5A3D;padding-left:16px;">• JSON-backup (volledig herstelbaar)</div>
+            <div style="padding:2px 0;color:#2E5A3D;padding-left:16px;">• Excel met 10 tabbladen (alle inventaris, taken, plattegrond, wishlist, journaal)</div>
+          </div>
+
+          <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px 14px;">
+            <div style="font-weight:700;color:#555;margin-bottom:8px;">📧 E-mailen (optioneel)</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input type="checkbox" id="tr-opt-email" style="width:18px;height:18px;cursor:pointer;" onchange="document.getElementById('tr-email-addr').disabled=!this.checked;document.getElementById('tr-email-addr').style.opacity=this.checked?'1':'.5';">
+              <input type="email" id="tr-email-addr" disabled placeholder="jouw@email.nl" style="flex:1;padding:7px 10px;font-size:13px;border-radius:6px;border:1px solid #ccc;opacity:.5;">
+            </div>
+            <div style="font-size:11px;color:#999;margin-top:5px;">Opent je e-mailprogramma met een begeleidende tekst. Voeg het ZIP-bestand zelf als bijlage toe.</div>
+          </div>
+        </div>
+
+        <button id="tr-save-btn" onclick="executeTuinSave()" style="width:100%;padding:16px;background:linear-gradient(135deg,#2E5A3D,#1F3A2A);color:#fff;border:none;border-radius:10px;font-family:-apple-system,sans-serif;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;box-shadow:0 4px 14px rgba(31,58,42,.35);">
+          ✅ Opslaan & ZIP downloaden
+        </button>
+        <button onclick="document.getElementById('tr-save-modal').remove()" style="width:100%;padding:10px;background:#fff;color:#666;border:1px solid #ddd;border-radius:10px;font-family:-apple-system,sans-serif;font-size:14px;cursor:pointer;margin-top:8px;">
+          ← Terug naar TuinRegister
+        </button>
+        <p style="text-align:center;font-size:10px;color:#bbb;margin-top:12px;">⚠️ Je bent zelf verantwoordelijk voor het bewaren van je backups.</p>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
   return(
     <div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",background:K.bg,minHeight:"100vh",color:K.text}}>
       
       <div style={{background:"linear-gradient(135deg,#1F3A2A 0%,#2E5A3D 60%,#3D6B4C 100%)",padding:"12px 20px",color:"#F3EBDD"}}>
         <div style={{maxWidth:"100%",margin:"0 auto",display:"flex",alignItems:"center",gap:12}}>
           <img src="data:image/png;base64,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Oai+bJWu5LegNUREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAFoWg8wtUQHxkpoX+s351w57NRy53t8eRXZIgMeqNJW+bOZp2+RC62fZ7bZTn4ZUj3LM0QEY33YppS+OgddDNUOgeHMJAB/FJ7Qe5c6LZZaIg1sVbUMY0Ya0NaAB3BSAiwopPZjST2YZBs9t0XKsqD7AufBpChi5TzH3LJEWTJ1UFio4eRkPmVzIqKnj9Vp9pXJRAbWsa3kFuREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREARYLte1Xc9K0Fvmtjadz6iZzH9awuGA3PDBCjs7XtVfxdu/sT+0uLm8excO11Wb2vJEUrYxemT8ir+dsGqx/B27+wP7S2/9sWq/wCKtv8AYu/aVX/urA+P5f5MeviWCRV8O2PVf8Tbf7F37S0G2TVf8Vbf7F37Sf8AdWB8fy/yPXxLCIq+f9sWq/4q2/2J/aWZbJNeXrVN+qKG5MpBHHTGUGKMtOd4DvPep8b0iw8i2NUN7fwMq6LeiUURF3SUIiIAiL41lRDSUk1VO8MihYXvd3ADJWG0ltg+yKEL5tQv1RVvNtdFRU+fQb1Ye4jvJPau60DtJrKy6Q2y+iJ4ncGR1DG7pDjyDgOGDyXn6vSbBsuVSb69N66fz9iP1sd6JVREXoSQIiIAiIgCIuo1le49NaUul/lp31LLfTPqHRMcA54aM4BPALDeuob0duiqpdulhcS4/crRtKxvYaqsc4+5rR9Kx6q6Um0CUnqLXp+nB5feZH4971A8qteJC8iBcxFSd3Sa2m5yDYvL4C79tdlaulRriAgXCx2KtbnjuNkhcR+c4fMsfiqzH4iBcZFA2iOk5o+7yx02oKCrsMrjjrXHroM+LmjeHtapwttfRXOhirrdVwVdLM3ejmhkD2PHeCOBU0LIz91ksZxl2OSiItzYIiIAiIgCIiAIiIAiIgCIse2iaroNFaPuGpLi1z4qSPLY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" alt="TuinRegister" style={{height:52,width:52,objectFit:"contain",borderRadius:6,flexShrink:0}}/>
-          <div style={{flex:1}}><h1 style={{margin:0,fontSize:20,fontWeight:700,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",letterSpacing:.5}}>TuinRegister <span style={{fontSize:12,fontWeight:600,opacity:.75,letterSpacing:.5}}>(v42)</span></h1><div style={{fontSize:11,opacity:.8,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",letterSpacing:.5}}>Tuinbeheer & Inventaris</div></div>
-          <button onClick={()=>setShowApiModal(true)} title="API-sleutel instellen" style={{background:hasKey?"rgba(255,255,255,.15)":"rgba(255,100,100,.35)",border:hasKey?"1px solid rgba(255,255,255,.3)":"1px solid rgba(255,150,150,.5)",borderRadius:8,cursor:"pointer",padding:"6px 10px",display:"flex",alignItems:"center",gap:6,color:"#fff",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:600,flexShrink:0}}>
-            <span style={{fontSize:16}}>🔑</span>{hasKey?"API OK":"API instellen"}
-          </button>
+          <div style={{flex:1}}><h1 style={{margin:0,fontSize:20,fontWeight:700,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",letterSpacing:.5}}>TuinRegister <span style={{fontSize:12,fontWeight:600,opacity:.75,letterSpacing:.5}}>(v45)</span></h1><div style={{fontSize:11,opacity:.8,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",letterSpacing:.5}}>Tuinbeheer & Inventaris</div></div>
+          <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"center"}}>
+            <button onClick={startTour} title="Rondleiding starten" style={{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.25)",borderRadius:10,cursor:"pointer",padding:"8px 12px",display:"flex",alignItems:"center",gap:6,color:"#F3EBDD",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:600,backdropFilter:"blur(4px)"}}>
+              <span style={{fontSize:14}}>❓</span>Rondleiding
+            </button>
+            <button onClick={()=>openSaveModal()} style={{background:"linear-gradient(135deg,#1F3A2A,#0F1F15)",border:"none",borderRadius:10,cursor:"pointer",padding:"8px 14px",display:"flex",alignItems:"center",gap:6,color:"#F3EBDD",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:700,boxShadow:"0 2px 8px rgba(31,58,42,.3)"}}>
+              <span style={{fontSize:14}}>💾</span>Opslaan & Afsluiten
+            </button>
+          </div>
         </div>
       </div>
-      {showApiModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-        <div style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:460,boxShadow:"0 20px 60px rgba(0,0,0,.2)"}}>
-          <h3 style={{margin:"0 0 8px",fontSize:18,color:K.text}}>🔑 Anthropic API-sleutel</h3>
-          <p style={{margin:"0 0 16px",fontSize:13,color:K.muted,lineHeight:1.5}}>Je sleutel wordt alleen lokaal in je browser opgeslagen en nooit gedeeld. Nodig voor het scannen van foto's via Claude AI.</p>
-          <div style={{marginBottom:12}}>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:K.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>API-sleutel</label>
-            <input type="password" value={apiKeyInput} onChange={e=>setApiKeyInput(e.target.value)} placeholder="sk-ant-api03-..." style={{width:"100%",padding:"10px 12px",border:`1px solid ${K.border}`,borderRadius:8,fontSize:14,fontFamily:"monospace",boxSizing:"border-box",outline:"none"}}/>
-          </div>
-          <p style={{margin:"0 0 16px",fontSize:12,color:K.muted}}>Je kunt een sleutel aanmaken via <a href="https://console.anthropic.com/settings/keys" target="_blank" style={{color:K.accent}}>console.anthropic.com</a></p>
-          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-            <button onClick={()=>setShowApiModal(false)} style={{padding:"9px 18px",borderRadius:8,border:`1px solid ${K.border}`,background:"#fff",cursor:"pointer",fontSize:13,fontFamily:"inherit"}}>Annuleren</button>
-            <button onClick={saveApiKey} style={{padding:"9px 18px",borderRadius:8,border:"none",background:K.accent,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"inherit"}}>Opslaan</button>
-          </div>
-        </div>
-      </div>}
+      
       <div style={{background:"#F3EBDD",borderBottom:"2px solid #E8DCC8",position:"sticky",top:0,zIndex:100,padding:"8px 16px 0"}}>
         {/* responsive nav - grid fills full width */}
         <div style={{maxWidth:"100%",margin:"0 auto",display:"grid",gridTemplateColumns:`repeat(${tabs.length},1fr)`,gap:4}}>
-          {tabs.map((t,i)=>{const ac=tabAccents[i]||K.accent;return<button key={i} onClick={()=>setTab(i)} style={{padding:"8px 4px 7px",border:tab===i?`2px solid ${ac}`:"2px solid #E8DCC8",borderRadius:8,background:tab===i?ac:"#FFFFFF",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,color:tab===i?"#F3EBDD":"#666666",fontFamily:"-apple-system,sans-serif",fontSize:9,fontWeight:600,transition:"all .2s",letterSpacing:.2,minWidth:0,overflow:"hidden",marginBottom:6,boxShadow:tab===i?"0 3px 10px rgba(46,90,61,.35)":"none"}}>{t.icon({size:17,color:tab===i?ac:K.muted})}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%",textAlign:"center",padding:"0 1px"}}>{t.label}</span></button>;})}
+          {tabs.map((t,i)=>{const ac=tabAccents[i]||K.accent;return<button id={`tab-btn-${i}`} key={i} onClick={()=>setTab(i)} style={{padding:"8px 4px 7px",border:tab===i?`2px solid ${ac}`:"2px solid #E8DCC8",borderRadius:8,background:tab===i?ac:"#FFFFFF",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,color:tab===i?"#F3EBDD":"#666666",fontFamily:"-apple-system,sans-serif",fontSize:9,fontWeight:600,transition:"all .2s",letterSpacing:.2,minWidth:0,overflow:"hidden",marginBottom:6,boxShadow:tab===i?"0 3px 10px rgba(46,90,61,.35)":"none"}}>{t.icon({size:17,color:tab===i?ac:K.muted})}<span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%",textAlign:"center",padding:"0 1px"}}>{t.label}</span></button>;})}
         </div>
       </div>
       <div style={{maxWidth:"100%",margin:"0 auto",padding:"16px 20px 80px",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"}}>
         {tab===0&&<Dashboard tasks={tasks} setTasks={setTasks} completions={completions} setCompletions={setCompletions} plants={plants} seeds={seeds} bulbs={bulbs}/>}
         {tab===1&&<PlattegrondTab gardenMap={gardenMap} setGardenMap={setGardenMap} allPlants={[...plants,...bulbs,...trees,...pondPlants,...veggies]} onNavigateInventaris={()=>setTab(2)}/>}
         {tab===2&&<InventarisTab plants={plants} setPlants={setPlants} bulbs={bulbs} setBulbs={setBulbs} trees={trees} setTrees={setTrees} pondPlants={pondPlants} setPondPlants={setPondPlants} veggies={veggies} setVeggies={setVeggies} seeds={seeds} setSeeds={setSeeds} tasks={tasks} setTasks={setTasks} gardenMap={gardenMap} setGardenMap={setGardenMap} onNavigatePlattegrond={()=>setTab(1)}/>}
-        {tab===3&&<BloeikalenderTab plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
-        {tab===4&&<TaskManager tasks={tasks} setTasks={setTasks} plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
+        {tab===3&&<BloeikalenderTab plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies} gardenMap={gardenMap}/>}
+        {tab===4&&<TaskManager tasks={tasks} setTasks={setTasks} completions={completions} setCompletions={setCompletions} plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
         {tab===5&&<FotojournaalTab journal={journal} setJournal={setJournal}/>}
         {tab===6&&<WishlistTab wishlist={wishlist} setWishlist={setWishlist}/>}
       </div>
+
+      {/* Tour Overlay */}
+      {tourStep >= 0 && (
+        <TourOverlay
+          step={tourStep}
+          total={TOUR_STEPS.length}
+          onNext={nextTourStep}
+          onSkip={closeTour}
+          onClose={closeTour}
+          currentTab={tab}
+          setTab={setTab}
+        />
+      )}
+
+
+
+
     </div>
   );
 }
