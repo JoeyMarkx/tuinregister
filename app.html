@@ -16,7 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F3EBDD; -webkit-text-size-adjust: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F3EBDD; -webkit-text-size-adjust: 100%; overflow-y: auto !important; }
   @keyframes spin { to { transform: rotate(360deg); } }
   /* Mobile optimizations */
   input, select, textarea, button { font-size: 16px !important; } /* Prevent iOS zoom on focus */
@@ -26,7 +26,9 @@
   /* Touch targets */
   button { min-height: 36px; }
   /* Smooth scrolling */
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; height: 100%; }
+  body { height: 100%; }
+  #root { min-height: 100%; }
   /* Safe area for notch phones */
   body { padding-bottom: env(safe-area-inset-bottom, 0); }
 </style>
@@ -1394,6 +1396,265 @@ function VeggieTab({veggies,setVeggies,onAfterAdd,hueCenter,hueWidth,onTrash}){
 
 
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// TAB: BEGROTING & BUDGET TRACKING
+// ═══════════════════════════════════════════════════════════════════
+const BEGROTING_CATS=[
+  "Planten & bollen","Bomen & struiken","Grond & mulch","Gereedschap","Bestrating & paden",
+  "Vijver & water","Verlichting","Meubels & decoratie","Hek & omheining","Kas & tunnel","Overig"
+];
+const BUDGET_COLOR="#1a6b5a";
+const BUDGET_LIGHT="#d4f0ea";
+
+function BegrotingBudgetTab({begroting,setBegroting,budget,setBudget}){
+  const [view,setView]=useState("begroting"); // "begroting" | "tracking"
+  // ── BEGROTING state ──
+  const [bgForm,setBgForm]=useState({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:""});
+  const [bgEditId,setBgEditId]=useState(null);
+  const [bgEditForm,setBgEditForm]=useState({});
+  const fileRef=useRef();
+
+  // ── BUDGET TRACKING state ──
+  const [btForm,setBtForm]=useState({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:"",datum:today(),nota:null});
+  const [btPreview,setBtPreview]=useState(null);
+  const [btStep,setBtStep]=useState("form"); // "form" | "done"
+  const [showBtAdd,setShowBtAdd]=useState(false);
+  const btFileRef=useRef();
+  const [btViewImg,setBtViewImg]=useState(null);
+
+  // ── BEGROTING helpers ──
+  const bgTotal=begroting.reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0);
+  const bgByCat=BEGROTING_CATS.map(c=>({
+    cat:c,
+    items:begroting.filter(r=>r.categorie===c),
+    total:begroting.filter(r=>r.categorie===c).reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0)
+  })).filter(g=>g.items.length>0);
+
+  function addBgItem(){
+    if(!bgForm.omschrijving.trim()||!bgForm.bedrag) return;
+    setBegroting(p=>[...p,{id:uid(),omschrijving:bgForm.omschrijving,categorie:bgForm.categorie,bedrag:parseFloat(bgForm.bedrag)||0}]);
+    setBgForm(p=>({...p,omschrijving:"",bedrag:""}));
+  }
+  function delBgItem(id){setBegroting(p=>p.filter(r=>r.id!==id));}
+  function saveBgEdit(){
+    setBegroting(p=>p.map(r=>r.id===bgEditId?{...r,...bgEditForm}:r));
+    setBgEditId(null);
+  }
+
+  // ── BUDGET TRACKING helpers ──
+  const btTotal=budget.reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0);
+  const bgTotalForTrack=bgTotal;
+
+  function handleNotaFile(e){
+    const f=e.target.files?.[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=ev=>{setBtForm(p=>({...p,nota:ev.target.result}));setBtPreview(ev.target.result);};
+    r.readAsDataURL(f);
+    e.target.value="";
+  }
+  function addBtItem(){
+    if(!btForm.omschrijving.trim()||!btForm.bedrag) return;
+    setBudget(p=>[...p,{id:uid(),omschrijving:btForm.omschrijving,categorie:btForm.categorie,bedrag:parseFloat(btForm.bedrag)||0,datum:btForm.datum,nota:btForm.nota||null}]);
+    setBtForm({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:"",datum:today(),nota:null});
+    setBtPreview(null);
+    setShowBtAdd(false);
+  }
+  function delBtItem(id){setBudget(p=>p.filter(r=>r.id!==id));}
+
+  const btByCat=BEGROTING_CATS.map(c=>({
+    cat:c,
+    items:budget.filter(r=>r.categorie===c),
+    total:budget.filter(r=>r.categorie===c).reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0)
+  })).filter(g=>g.items.length>0);
+
+  const remaining=bgTotal-btTotal;
+
+  return(<div>
+    {/* Toggle */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+      <div style={{display:"inline-flex",background:"#fff",border:`1px solid ${K.border}`,borderRadius:10,padding:3,gap:3}}>
+        {[["begroting","📋 Begroting"],["tracking","💸 Budget tracking"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setView(v)} style={{
+            padding:"7px 16px",borderRadius:7,border:"none",cursor:"pointer",
+            background:view===v?BUDGET_COLOR:"transparent",
+            color:view===v?"#fff":K.muted,
+            fontSize:12,fontWeight:view===v?700:500,fontFamily:"inherit",transition:"all .15s"
+          }}>{l}</button>
+        ))}
+      </div>
+    </div>
+
+    {/* ══ BEGROTING VIEW ══ */}
+    {view==="begroting"&&<>
+      {/* Summary card */}
+      <div style={{background:BUDGET_COLOR,borderRadius:12,padding:"14px 18px",marginBottom:16,color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:11,opacity:.75,fontWeight:600,letterSpacing:.5,textTransform:"uppercase"}}>Totaal begroot</div>
+          <div style={{fontSize:28,fontWeight:800,marginTop:2}}>€ {bgTotal.toFixed(2).replace(".",",")}</div>
+        </div>
+        <div style={{fontSize:32,opacity:.4}}>📋</div>
+      </div>
+
+      {/* Add form */}
+      <Card style={{marginBottom:16}}>
+        <div style={{fontSize:12,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Kostenpost toevoegen</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
+          <div style={{gridColumn:"1/-1"}}>
+            <Input label="Omschrijving" value={bgForm.omschrijving} onChange={e=>setBgForm(p=>({...p,omschrijving:e.target.value}))} placeholder="Bijv. Vaste planten vak A"/>
+          </div>
+          <Select label="Categorie" value={bgForm.categorie} onChange={e=>setBgForm(p=>({...p,categorie:e.target.value}))} options={BEGROTING_CATS.map(c=>({value:c,label:c}))}/>
+          <Input label="Bedrag (€)" type="number" min="0" step="0.01" value={bgForm.bedrag} onChange={e=>setBgForm(p=>({...p,bedrag:e.target.value}))} placeholder="0,00"/>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:4}}>
+          <Button onClick={addBgItem} style={{background:BUDGET_COLOR}} disabled={!bgForm.omschrijving.trim()||!bgForm.bedrag}><Icons.plus size={14}/>Toevoegen</Button>
+        </div>
+      </Card>
+
+      {/* Grouped by category */}
+      {begroting.length===0&&<Card><EmptyState icon={<span style={{fontSize:32}}>📋</span>} title="Geen kostenposten" sub="Voeg een kostenpost toe om te beginnen."/></Card>}
+      {bgByCat.map(g=>(
+        <Card key={g.cat} style={{marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:13,fontWeight:700,color:BUDGET_COLOR}}>{g.cat}</span>
+            <span style={{fontSize:13,fontWeight:700,color:BUDGET_COLOR}}>€ {g.total.toFixed(2).replace(".",",")}</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {g.items.map(r=>(
+              <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:K.bL,borderRadius:7}}>
+                {bgEditId===r.id
+                  ?<>
+                    <input value={bgEditForm.omschrijving||""} onChange={e=>setBgEditForm(p=>({...p,omschrijving:e.target.value}))}
+                      style={{flex:1,padding:"5px 8px",border:`1px solid ${K.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit"}}/>
+                    <input type="number" value={bgEditForm.bedrag||""} onChange={e=>setBgEditForm(p=>({...p,bedrag:e.target.value}))}
+                      style={{width:90,padding:"5px 8px",border:`1px solid ${K.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit"}}/>
+                    <button onClick={saveBgEdit} style={{padding:"4px 10px",borderRadius:6,border:"none",background:BUDGET_COLOR,color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✓</button>
+                    <button onClick={()=>setBgEditId(null)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+                  </>
+                  :<>
+                    <span style={{flex:1,fontSize:13,color:K.text}}>{r.omschrijving}</span>
+                    <span style={{fontSize:13,fontWeight:600,color:BUDGET_COLOR,minWidth:70,textAlign:"right"}}>€ {parseFloat(r.bedrag||0).toFixed(2).replace(".",",")}</span>
+                    <button onClick={()=>{setBgEditId(r.id);setBgEditForm({omschrijving:r.omschrijving,bedrag:r.bedrag});}} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.muted,display:"flex",alignItems:"center"}} title="Bewerken"><Icons.edit size={14}/></button>
+                    <button onClick={()=>delBgItem(r.id)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.danger,display:"flex",alignItems:"center"}} title="Verwijderen"><Icons.trash size={14}/></button>
+                  </>
+                }
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end",marginTop:6,paddingTop:6,borderTop:`1px solid ${K.border}`}}>
+            <span style={{fontSize:12,fontWeight:600,color:K.muted}}>Subtotaal: <strong style={{color:BUDGET_COLOR}}>€ {g.total.toFixed(2).replace(".",",")}</strong></span>
+          </div>
+        </Card>
+      ))}
+      {begroting.length>0&&<Card style={{background:BUDGET_COLOR,color:"#fff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:14,fontWeight:700}}>🏷️ Totaal begroting</span>
+          <span style={{fontSize:22,fontWeight:800}}>€ {bgTotal.toFixed(2).replace(".",",")}</span>
+        </div>
+      </Card>}
+    </>}
+
+    {/* ══ BUDGET TRACKING VIEW ══ */}
+    {view==="tracking"&&<>
+      {/* Summary cards */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
+        <div style={{background:BUDGET_COLOR,borderRadius:10,padding:"10px 12px",color:"#fff"}}>
+          <div style={{fontSize:9,opacity:.7,fontWeight:600,letterSpacing:.4,textTransform:"uppercase"}}>Begroot</div>
+          <div style={{fontSize:16,fontWeight:800,marginTop:2}}>€ {bgTotalForTrack.toFixed(2).replace(".",",")}</div>
+        </div>
+        <div style={{background:"#c44a2a",borderRadius:10,padding:"10px 12px",color:"#fff"}}>
+          <div style={{fontSize:9,opacity:.7,fontWeight:600,letterSpacing:.4,textTransform:"uppercase"}}>Uitgegeven</div>
+          <div style={{fontSize:16,fontWeight:800,marginTop:2}}>€ {btTotal.toFixed(2).replace(".",",")}</div>
+        </div>
+        <div style={{background:remaining>=0?"#2a6a20":"#8B2020",borderRadius:10,padding:"10px 12px",color:"#fff"}}>
+          <div style={{fontSize:9,opacity:.7,fontWeight:600,letterSpacing:.4,textTransform:"uppercase"}}>Resterend</div>
+          <div style={{fontSize:16,fontWeight:800,marginTop:2}}>€ {remaining.toFixed(2).replace(".",",")}</div>
+        </div>
+      </div>
+
+      {bgTotalForTrack>0&&<div style={{marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:K.muted,marginBottom:4}}>
+          <span>Budget verbruikt</span>
+          <span>{Math.min(100,Math.round((btTotal/bgTotalForTrack)*100))}%</span>
+        </div>
+        <div style={{height:10,background:K.border,borderRadius:6,overflow:"hidden"}}>
+          <div style={{height:"100%",width:`${Math.min(100,(btTotal/bgTotalForTrack)*100)}%`,background:btTotal>bgTotalForTrack?"#8B2020":BUDGET_COLOR,borderRadius:6,transition:"width .4s"}}/>
+        </div>
+      </div>}
+
+      {/* Add cost button */}
+      <Button onClick={()=>setShowBtAdd(true)} style={{background:BUDGET_COLOR,marginBottom:16,width:"100%",justifyContent:"center"}}><Icons.plus size={14}/>Kosten afschrijven</Button>
+
+      {budget.length===0&&<Card><EmptyState icon={<span style={{fontSize:32}}>💸</span>} title="Geen kosten geboekt" sub="Gebruik 'Kosten afschrijven' om een factuur of bonnetje te verwerken."/></Card>}
+
+      {/* Per category groups */}
+      {btByCat.map(g=>(
+        <Card key={g.cat} style={{marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:13,fontWeight:700,color:"#c44a2a"}}>{g.cat}</span>
+            <span style={{fontSize:13,fontWeight:700,color:"#c44a2a"}}>€ {g.total.toFixed(2).replace(".",",")}</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {g.items.map(r=>(
+              <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:K.bL,borderRadius:7}}>
+                {r.nota&&<img src={r.nota} alt="nota" onClick={()=>setBtViewImg(r.nota)} style={{width:32,height:32,objectFit:"cover",borderRadius:5,cursor:"pointer",border:`1px solid ${K.border}`,flexShrink:0}}/>}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:K.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.omschrijving}</div>
+                  <div style={{fontSize:11,color:K.muted}}>{r.datum}</div>
+                </div>
+                <span style={{fontSize:13,fontWeight:600,color:"#c44a2a",minWidth:70,textAlign:"right"}}>€ {parseFloat(r.bedrag||0).toFixed(2).replace(".",",")}</span>
+                <button onClick={()=>delBtItem(r.id)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.danger,display:"flex",alignItems:"center"}} title="Verwijderen"><Icons.trash size={14}/></button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ))}
+
+      {budget.length>0&&<Card style={{background:"#c44a2a",color:"#fff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:14,fontWeight:700}}>💸 Totaal uitgegeven</span>
+          <span style={{fontSize:22,fontWeight:800}}>€ {btTotal.toFixed(2).replace(".",",")}</span>
+        </div>
+      </Card>}
+
+      {/* Add cost modal */}
+      <Modal open={showBtAdd} onClose={()=>{setShowBtAdd(false);setBtForm({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:"",datum:today(),nota:null});setBtPreview(null);}} title="Kosten afschrijven">
+        <div style={{fontSize:13,color:K.muted,marginBottom:14}}>Voeg een factuur of bonnetje toe. Je kunt in meerdere stappen kosten afschrijven.</div>
+        {/* Receipt upload */}
+        <div style={{marginBottom:12}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:K.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:.3}}>Factuur / bonnetje (optioneel)</label>
+          {btPreview
+            ?<div style={{position:"relative",marginBottom:8}}>
+                <img src={btPreview} alt="" style={{width:"100%",maxHeight:180,objectFit:"contain",borderRadius:8,border:`1px solid ${K.border}`,background:"#f5f5f5"}}/>
+                <button onClick={()=>{setBtPreview(null);setBtForm(p=>({...p,nota:null}));}} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.55)",border:"none",borderRadius:"50%",width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.x size={13} color="#fff"/></button>
+              </div>
+            :<div onClick={()=>btFileRef.current?.click()} style={{width:"100%",padding:"18px 0",borderRadius:8,border:`2px dashed ${K.border}`,display:"flex",flexDirection:"column",alignItems:"center",gap:6,cursor:"pointer",background:K.bL,marginBottom:8}}>
+                <Icons.camera size={24} color={K.muted}/>
+                <span style={{fontSize:12,color:K.muted}}>Klik om foto/scan toe te voegen</span>
+              </div>
+          }
+          <input ref={btFileRef} type="file" accept="image/*,application/pdf" capture="environment" onChange={handleNotaFile} style={{display:"none"}}/>
+        </div>
+        <Input label="Omschrijving" value={btForm.omschrijving} onChange={e=>setBtForm(p=>({...p,omschrijving:e.target.value}))} placeholder="Bijv. Planten Kwekerij Jansen"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Input label="Bedrag (€)" type="number" min="0" step="0.01" value={btForm.bedrag} onChange={e=>setBtForm(p=>({...p,bedrag:e.target.value}))} placeholder="0,00"/>
+          <Input label="Datum" type="date" value={btForm.datum} onChange={e=>setBtForm(p=>({...p,datum:e.target.value}))}/>
+        </div>
+        <Select label="Categorie" value={btForm.categorie} onChange={e=>setBtForm(p=>({...p,categorie:e.target.value}))} options={BEGROTING_CATS.map(c=>({value:c,label:c}))}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
+          <Button variant="secondary" onClick={()=>{setShowBtAdd(false);setBtForm({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:"",datum:today(),nota:null});setBtPreview(null);}}>Annuleren</Button>
+          <Button onClick={addBtItem} style={{background:"#c44a2a"}} disabled={!btForm.omschrijving.trim()||!btForm.bedrag}><Icons.check size={14}/>Afschrijven</Button>
+        </div>
+      </Modal>
+
+      {/* Image lightbox for nota */}
+      {btViewImg&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.88)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setBtViewImg(null)}>
+        <img src={btViewImg} alt="" style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:8,objectFit:"contain"}}/>
+        <button onClick={()=>setBtViewImg(null)} style={{position:"absolute",top:14,right:14,background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:34,height:34,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.x color="#fff"/></button>
+      </div>}
+    </>}
+  </div>);
+}
+
 // TAB 8: WISHLIST
 // ═══════════════════════════════════════════════════════════════════
 const MOODBOARD_CATS=[
@@ -1411,21 +1672,84 @@ function MoodboardWishlistTab({wishlist,setWishlist,moodboard,setMoodboard}){
   const [mbForm,setMbForm]=useState({categorie:"",notitie:""});
   const [mbPreview,setMbPreview]=useState(null);
   const mbFr=React.useRef();
+  // Crop queue: array of {dataUrl, categorie}; shown one by one
+  const [cropQueue,setCropQueue]=useState([]); // [{dataUrl,categorie}]
+  const [cropCurrent,setCropCurrent]=useState(null); // {dataUrl,categorie,posX,posY,dragging,dragStartX,dragStartY,startPosX,startPosY}
+  const cropRef=React.useRef();
 
   const mbFiltered=mbCat==="alle"?moodboard:moodboard.filter(m=>m.categorie===mbCat);
 
   function handleMbImg(e){
     const files=Array.from(e.target.files||[]);
     if(!files.length) return;
-    files.forEach(f=>{
+    const loaded=[];
+    let count=0;
+    files.forEach((f,i)=>{
       const r=new FileReader();
       r.onload=ev=>{
-        setMoodboard(p=>[...p,{id:Date.now()+Math.random(),photo:ev.target.result,categorie:mbForm.categorie||"Anders",notitie:""}]);
+        loaded[i]={dataUrl:ev.target.result,categorie:mbForm.categorie||"Anders"};
+        count++;
+        if(count===files.length){
+          // Start crop queue
+          setCropQueue(loaded.slice(1));
+          setCropCurrent({...loaded[0],posX:50,posY:50,dragging:false,dragStartX:0,dragStartY:0,startPosX:50,startPosY:50});
+          setShowMbAdd(false);
+        }
       };
       r.readAsDataURL(f);
     });
     e.target.value="";
-    setShowMbAdd(false);
+  }
+
+  function cropPointerDown(e){
+    e.preventDefault();
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    setCropCurrent(p=>({...p,dragging:true,dragStartX:cx,dragStartY:cy,startPosX:p.posX,startPosY:p.posY}));
+  }
+  function cropPointerMove(e){
+    if(!cropCurrent?.dragging) return;
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    const el=cropRef.current; if(!el) return;
+    const rect=el.getBoundingClientRect();
+    const dx=((cx-cropCurrent.dragStartX)/rect.width)*100;
+    const dy=((cy-cropCurrent.dragStartY)/rect.height)*100;
+    const nx=Math.max(0,Math.min(100,cropCurrent.startPosX-dx));
+    const ny=Math.max(0,Math.min(100,cropCurrent.startPosY-dy));
+    setCropCurrent(p=>({...p,posX:nx,posY:ny}));
+  }
+  function cropPointerUp(){
+    setCropCurrent(p=>p?({...p,dragging:false}):null);
+  }
+  function cropConfirm(){
+    if(!cropCurrent) return;
+    // Save with objectPosition as percentages
+    setMoodboard(p=>[...p,{id:Date.now()+Math.random(),photo:cropCurrent.dataUrl,categorie:cropCurrent.categorie,notitie:"",posX:cropCurrent.posX,posY:cropCurrent.posY}]);
+    // Move to next in queue
+    if(cropQueue.length>0){
+      const [next,...rest]=cropQueue;
+      setCropQueue(rest);
+      setCropCurrent({...next,posX:50,posY:50,dragging:false,dragStartX:0,dragStartY:0,startPosX:50,startPosY:50});
+    } else {
+      setCropCurrent(null);
+    }
+  }
+  function cropSkip(){
+    // Save without custom positioning
+    if(!cropCurrent) return;
+    setMoodboard(p=>[...p,{id:Date.now()+Math.random(),photo:cropCurrent.dataUrl,categorie:cropCurrent.categorie,notitie:"",posX:50,posY:50}]);
+    if(cropQueue.length>0){
+      const [next,...rest]=cropQueue;
+      setCropQueue(rest);
+      setCropCurrent({...next,posX:50,posY:50,dragging:false,dragStartX:0,dragStartY:0,startPosX:50,startPosY:50});
+    } else {
+      setCropCurrent(null);
+    }
+  }
+  function cropCancel(){
+    setCropCurrent(null);
+    setCropQueue([]);
   }
 
   function updateMbItem(id,updates){
@@ -1487,20 +1811,48 @@ function MoodboardWishlistTab({wishlist,setWishlist,moodboard,setMoodboard}){
 
       {moodboard.length===0&&<Card><EmptyState icon={<Icons.camera size={32} color={K.wish}/>} title="Nog geen moodboard foto's" sub="Voeg foto's toe die je inspireren voor je tuin."/></Card>}
 
-      {/* Instagram-style grid */}
-      {mbFiltered.length>0&&<div style={{columns:"3 160px",gap:6,marginBottom:16}}>
-        {mbFiltered.map(m=>(
-          <div key={m.id} onClick={()=>setMbSelected(m)} style={{breakInside:"avoid",marginBottom:6,cursor:"pointer",borderRadius:8,overflow:"hidden",position:"relative",display:"block"}}
-            onMouseEnter={e=>{e.currentTarget.querySelector(".mb-overlay").style.opacity=1;}}
-            onMouseLeave={e=>{e.currentTarget.querySelector(".mb-overlay").style.opacity=0;}}>
-            <img src={m.photo} alt="" style={{width:"100%",display:"block",borderRadius:8}}/>
-            <div className="mb-overlay" style={{position:"absolute",inset:0,background:"rgba(0,0,0,.38)",borderRadius:8,display:"flex",flexDirection:"column",justifyContent:"flex-end",padding:8,opacity:0,transition:"opacity .2s"}}>
-              {m.categorie&&<span style={{fontSize:10,fontWeight:700,color:"#fff",background:"rgba(138,42,90,.75)",borderRadius:8,padding:"2px 8px",alignSelf:"flex-start",marginBottom:3}}>{m.categorie}</span>}
-              {m.notitie&&<span style={{fontSize:10,color:"rgba(255,255,255,.9)",lineHeight:1.3}}>{m.notitie}</span>}
+      {/* Instagram-style square grid */}
+      {mbFiltered.length>0&&<>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:3,marginBottom:16}}>
+          {mbFiltered.map(m=>(
+            <div key={m.id} style={{position:"relative",paddingBottom:"100%",cursor:"pointer",borderRadius:4,overflow:"hidden"}}
+              onMouseEnter={e=>{const ov=e.currentTarget.querySelector(".mb-overlay");if(ov)ov.style.opacity="1";}}
+              onMouseLeave={e=>{const ov=e.currentTarget.querySelector(".mb-overlay");if(ov)ov.style.opacity="0";}}>
+              <div style={{position:"absolute",inset:0,overflow:"hidden",borderRadius:4}} onClick={()=>setMbSelected(m)}>
+                <img src={m.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block",objectPosition:`${m.posX??50}% ${m.posY??50}%`}}/>
+              </div>
+              <div className="mb-overlay" style={{position:"absolute",inset:0,background:"rgba(0,0,0,.38)",borderRadius:4,display:"flex",flexDirection:"column",justifyContent:"flex-end",padding:6,opacity:0,transition:"opacity .2s",pointerEvents:"none"}}>
+                {m.categorie&&<span style={{fontSize:9,fontWeight:700,color:"#fff",background:"rgba(138,42,90,.75)",borderRadius:6,padding:"1px 6px",alignSelf:"flex-start",marginBottom:2}}>{m.categorie}</span>}
+                {m.notitie&&<span style={{fontSize:9,color:"rgba(255,255,255,.9)",lineHeight:1.3}}>{m.notitie}</span>}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>}
+          ))}
+        </div>
+        {mbSelected&&(()=>{
+          const idx=mbFiltered.findIndex(m=>m.id===mbSelected.id);
+          return(
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.88)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setMbSelected(null)}>
+              <div onClick={e=>e.stopPropagation()} style={{position:"relative",maxWidth:"92vw",maxHeight:"92vh",display:"flex",flexDirection:"column",alignItems:"center"}}>
+                <img src={mbSelected.photo} alt="" style={{maxWidth:"88vw",maxHeight:"72vh",borderRadius:8,objectFit:"contain"}}/>
+                {(mbSelected.categorie||mbSelected.notitie)&&<div style={{marginTop:8,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                  {mbSelected.categorie&&<span style={{fontSize:11,fontWeight:700,color:"#fff",background:"rgba(138,42,90,.7)",borderRadius:8,padding:"2px 10px"}}>{mbSelected.categorie}</span>}
+                  {mbSelected.notitie&&<span style={{fontSize:12,color:"rgba(255,255,255,.85)",textAlign:"center"}}>{mbSelected.notitie}</span>}
+                </div>}
+                {mbFiltered.length>1&&<>
+                  <button onClick={()=>setMbSelected(mbFiltered[(idx-1+mbFiltered.length)%mbFiltered.length])} style={{position:"absolute",left:-48,top:"40%",transform:"translateY(-50%)",background:"rgba(255,255,255,.18)",border:"none",borderRadius:"50%",width:40,height:40,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.left color="#fff"/></button>
+                  <button onClick={()=>setMbSelected(mbFiltered[(idx+1)%mbFiltered.length])} style={{position:"absolute",right:-48,top:"40%",transform:"translateY(-50%)",background:"rgba(255,255,255,.18)",border:"none",borderRadius:"50%",width:40,height:40,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.right color="#fff"/></button>
+                </>}
+                <div style={{display:"flex",gap:8,marginTop:10}}>
+                  <button onClick={()=>{const d=window.prompt("Notitie:",mbSelected.notitie||"");if(d!==null)updateMbItem(mbSelected.id,{notitie:d});}} style={{padding:"6px 14px",borderRadius:8,border:"none",background:"rgba(255,255,255,.15)",color:"#fff",fontSize:12,cursor:"pointer"}}>✏️ Notitie</button>
+                  <button onClick={()=>{delMb(mbSelected.id);}} style={{padding:"6px 14px",borderRadius:8,border:"none",background:"rgba(180,40,40,.7)",color:"#fff",fontSize:12,cursor:"pointer"}}>🗑 Verwijderen</button>
+                </div>
+                <div style={{textAlign:"center",color:"rgba(255,255,255,.45)",fontSize:10,marginTop:5}}>{idx+1}/{mbFiltered.length} · klik buiten om te sluiten</div>
+              </div>
+              <button onClick={()=>setMbSelected(null)} style={{position:"absolute",top:14,right:14,background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:34,height:34,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.x color="#fff"/></button>
+            </div>
+          );
+        })()}
+      </>}
       {mbFiltered.length===0&&moodboard.length>0&&<Card><EmptyState icon={<Icons.search size={28} color={K.muted}/>} title="Geen foto's in deze categorie" sub="Kies een andere categorie."/></Card>}
 
       {/* Add photos modal */}
@@ -1521,28 +1873,74 @@ function MoodboardWishlistTab({wishlist,setWishlist,moodboard,setMoodboard}){
         </div>
       </Modal>
 
-      {/* Photo detail modal */}
-      <Modal open={!!mbSelected} onClose={()=>setMbSelected(null)} title="Moodboard foto" wide>
-        {mbSelected&&<div>
-          <img src={mbSelected.photo} alt="" style={{width:"100%",maxHeight:360,objectFit:"contain",borderRadius:10,marginBottom:16,background:"#f5f0e8"}}/>
-          <div style={{marginBottom:10}}>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:K.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:.3}}>Categorie</label>
-            <select value={mbSelected.categorie||""} onChange={e=>updateMbItem(mbSelected.id,{categorie:e.target.value})}
-              style={{width:"100%",padding:"8px 12px",border:`2px solid ${K.border}`,borderRadius:8,fontSize:13,fontFamily:"inherit",background:"#fff"}}>
-              {[{value:"",label:"— Kies categorie —"},...MOODBOARD_CATS.map(c=>({value:c,label:c}))].map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+      {/* Photo detail: inline lightbox above */}
+
+      {/* ── CROP / KADERING EDITOR ── */}
+      {cropCurrent&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.92)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:16}}>
+        <div style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:6,textAlign:"center"}}>
+          📐 Kadering instellen {cropQueue.length>0?`(${moodboard.length===0&&cropQueue.length>0?1:1} van ${cropQueue.length+1} foto's)`:""}
+        </div>
+        <div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginBottom:14,textAlign:"center"}}>Sleep de foto om het zichtbare deel te kiezen</div>
+        {/* Square crop preview */}
+        <div
+          ref={cropRef}
+          onMouseDown={cropPointerDown}
+          onMouseMove={cropPointerMove}
+          onMouseUp={cropPointerUp}
+          onMouseLeave={cropPointerUp}
+          onTouchStart={cropPointerDown}
+          onTouchMove={cropPointerMove}
+          onTouchEnd={cropPointerUp}
+          style={{
+            width:Math.min(320,window.innerWidth-48),
+            height:Math.min(320,window.innerWidth-48),
+            borderRadius:10,
+            overflow:"hidden",
+            cursor:"grab",
+            border:"3px solid #fff",
+            flexShrink:0,
+            userSelect:"none",
+            position:"relative",
+            background:"#222",
+          }}>
+          <img
+            src={cropCurrent.dataUrl}
+            alt=""
+            draggable={false}
+            style={{
+              width:"100%",
+              height:"100%",
+              objectFit:"cover",
+              objectPosition:`${cropCurrent.posX}% ${cropCurrent.posY}%`,
+              display:"block",
+              pointerEvents:"none",
+              userSelect:"none",
+            }}
+          />
+          {/* Overlay cross-hair */}
+          <div style={{position:"absolute",inset:0,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center",opacity:.25}}>
+            <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:1,background:"#fff",transform:"translateX(-50%)"}}/>
+            <div style={{position:"absolute",top:"50%",left:0,right:0,height:1,background:"#fff",transform:"translateY(-50%)"}}/>
           </div>
-          <div style={{marginBottom:16}}>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:K.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:.3}}>Notitie</label>
-            <textarea value={mbSelected.notitie||""} onChange={e=>updateMbItem(mbSelected.id,{notitie:e.target.value})}
-              placeholder="Bijv. gezien in tijdschrift, of kleurpalet idee..."
-              style={{width:"100%",padding:"8px 12px",border:`2px solid ${K.border}`,borderRadius:8,fontSize:13,fontFamily:"inherit",background:"#fff",resize:"vertical",minHeight:60,boxSizing:"border-box",outline:"none"}}/>
-          </div>
-          <div style={{display:"flex",justifyContent:"flex-end"}}>
-            <Button variant="danger" onClick={()=>delMb(mbSelected.id)}><Icons.trash size={14}/>Verwijderen</Button>
-          </div>
-        </div>}
-      </Modal>
+        </div>
+        {/* Position hint */}
+        <div style={{color:"rgba(255,255,255,.4)",fontSize:10,marginTop:8,fontFamily:"monospace"}}>
+          positie: {Math.round(cropCurrent.posX)}% / {Math.round(cropCurrent.posY)}%
+        </div>
+        {/* Buttons */}
+        <div style={{display:"flex",gap:10,marginTop:16,flexWrap:"wrap",justifyContent:"center"}}>
+          <button onClick={cropCancel} style={{padding:"8px 18px",borderRadius:8,border:"1px solid rgba(255,255,255,.3)",background:"transparent",color:"rgba(255,255,255,.7)",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
+            ✕ Annuleren
+          </button>
+          <button onClick={cropSkip} style={{padding:"8px 18px",borderRadius:8,border:"1px solid rgba(255,255,255,.3)",background:"transparent",color:"rgba(255,255,255,.7)",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
+            Overslaan
+          </button>
+          <button onClick={cropConfirm} style={{padding:"8px 22px",borderRadius:8,border:"none",background:K.wish,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+            ✓ Opslaan {cropQueue.length>0?"& volgende":""}
+          </button>
+        </div>
+        {cropQueue.length>0&&<div style={{color:"rgba(255,255,255,.4)",fontSize:11,marginTop:10}}>{cropQueue.length} foto{cropQueue.length!==1?"'s":""} nog in de wachtrij</div>}
+      </div>}
     </>}
 
     {/* ══ WISHLIST VIEW ══ */}
@@ -4358,6 +4756,8 @@ function CottageGardenApp(){
   const [moodboard,setMoodboard]=useState(()=>lsGet("tr_moodboard",[]));
   const [gardenMap,setGardenMap]=useState(()=>lsGet("tr_gardenmap",{outline:[],outlineClosed:false,phase:"draw",cells:{},pins:[],cols:20,rows:16,gardenSized:false,gardenBreedte:null,gardenHoogte:null}));
   const [journal,setJournal]=useState(()=>lsGet("tr_journal",[]));
+  const [begroting,setBegroting]=useState(()=>lsGet("tr_begroting",[]));
+  const [budget,setBudget]=useState(()=>lsGet("tr_budget",[]));
 
   // ── Persist all state to localStorage ──
   useEffect(()=>{lsSet("tr_plants",plants);},[plants]);
@@ -4372,6 +4772,8 @@ function CottageGardenApp(){
   useEffect(()=>{lsSet("tr_moodboard",moodboard);},[moodboard]);
   useEffect(()=>{lsSet("tr_gardenmap",gardenMap);},[gardenMap]);
   useEffect(()=>{lsSet("tr_journal",journal);},[journal]);
+  useEffect(()=>{lsSet("tr_begroting",begroting);},[begroting]);
+  useEffect(()=>{lsSet("tr_budget",budget);},[budget]);
 
   // ── Auto-purge: verlopen taken ouder dan 7 dagen ──
   useEffect(()=>{
@@ -4407,12 +4809,13 @@ function CottageGardenApp(){
     {icon:Icons.dashboard,label:"Dashboard"},
     {icon:Icons.map,label:"Plattegrond"},
     {icon:Icons.heart,label:"Moodboard & Wishlist"},
+    {icon:(p)=><svg {...{width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2",...p}}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 8h2m4 0h2M7 12h4"/></svg>,label:"Begroting"},
     {icon:Icons.plant,label:"Inventaris"},
     {icon:Icons.chart,label:"Bloei"},
     {icon:Icons.tasks,label:"Taken"},
     {icon:Icons.camera2,label:"Journaal"},
   ];
-  const tabAccents=["","#5A3A8A",K.wish,"","#2E7DA8","","#C4703A"];
+  const tabAccents=["","#5A3A8A",K.wish,"#1a6b5a","","#2E7DA8","","#C4703A"];
 
 
   // ═══ SESSIE OPSLAAN & AFSLUITEN ═══════════════════════════════════
@@ -4614,7 +5017,7 @@ function CottageGardenApp(){
   }
 
   return(
-    <div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",background:K.bg,minHeight:"100vh",color:K.text}}>
+    <div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",background:K.bg,minHeight:"100vh",color:K.text,overflowX:"hidden"}}>
       
       <div style={{background:"linear-gradient(135deg,#1F3A2A 0%,#2E5A3D 60%,#3D6B4C 100%)",padding:"12px 20px",color:"#F3EBDD"}}>
         <div style={{maxWidth:"100%",margin:"0 auto",display:"flex",alignItems:"center",gap:12}}>
@@ -4639,12 +5042,13 @@ function CottageGardenApp(){
       </div>
       <div style={{maxWidth:"100%",margin:"0 auto",padding:"16px 20px 80px",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"}}>
         {tab===0&&<Dashboard tasks={tasks} setTasks={setTasks} completions={completions} setCompletions={setCompletions} plants={plants} seeds={seeds} bulbs={bulbs}/>}
-        {tab===1&&<PlattegrondTab gardenMap={gardenMap} setGardenMap={setGardenMap} allPlants={[...plants,...bulbs,...trees,...pondPlants,...veggies]} plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies} onNavigateInventaris={()=>setTab(3)}/>}
+        {tab===1&&<PlattegrondTab gardenMap={gardenMap} setGardenMap={setGardenMap} allPlants={[...plants,...bulbs,...trees,...pondPlants,...veggies]} plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies} onNavigateInventaris={()=>setTab(4)}/>}
         {tab===2&&<MoodboardWishlistTab wishlist={wishlist} setWishlist={setWishlist} moodboard={moodboard} setMoodboard={setMoodboard}/>}
-        {tab===3&&<InventarisTab plants={plants} setPlants={setPlants} bulbs={bulbs} setBulbs={setBulbs} trees={trees} setTrees={setTrees} pondPlants={pondPlants} setPondPlants={setPondPlants} veggies={veggies} setVeggies={setVeggies} seeds={seeds} setSeeds={setSeeds} tasks={tasks} setTasks={setTasks} gardenMap={gardenMap} setGardenMap={setGardenMap} onNavigatePlattegrond={()=>setTab(1)}/>}
-        {tab===4&&<BloeikalenderTab plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies} gardenMap={gardenMap}/>}
-        {tab===5&&<TaskManager tasks={tasks} setTasks={setTasks} completions={completions} setCompletions={setCompletions} plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
-        {tab===6&&<FotojournaalTab journal={journal} setJournal={setJournal}/>}
+        {tab===3&&<BegrotingBudgetTab begroting={begroting} setBegroting={setBegroting} budget={budget} setBudget={setBudget}/>}
+        {tab===4&&<InventarisTab plants={plants} setPlants={setPlants} bulbs={bulbs} setBulbs={setBulbs} trees={trees} setTrees={setTrees} pondPlants={pondPlants} setPondPlants={setPondPlants} veggies={veggies} setVeggies={setVeggies} seeds={seeds} setSeeds={setSeeds} tasks={tasks} setTasks={setTasks} gardenMap={gardenMap} setGardenMap={setGardenMap} onNavigatePlattegrond={()=>setTab(1)}/>}
+        {tab===5&&<BloeikalenderTab plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies} gardenMap={gardenMap}/>}
+        {tab===6&&<TaskManager tasks={tasks} setTasks={setTasks} completions={completions} setCompletions={setCompletions} plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
+        {tab===7&&<FotojournaalTab journal={journal} setJournal={setJournal}/>}
       </div>
 
       {/* Tour Overlay */}
