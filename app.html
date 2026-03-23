@@ -34,15 +34,6 @@
 </style>
 </head>
 <body>
-<script>
-  if(!sessionStorage.getItem('tr_auth')){
-    window.location.replace('index.html');
-  }
-  function trLogout(){
-    sessionStorage.removeItem('tr_auth');
-    window.location.href = 'index.html';
-  }
-</script>
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
@@ -5332,9 +5323,6 @@ function CottageGardenApp(){
             </button>
             <button onClick={()=>openSaveModal()} style={{background:"linear-gradient(135deg,#1F3A2A,#0F1F15)",border:"none",borderRadius:10,cursor:"pointer",padding:"8px 14px",display:"flex",alignItems:"center",gap:6,color:"#F3EBDD",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:700,boxShadow:"0 2px 8px rgba(31,58,42,.3)"}}>
               <span style={{fontSize:14}}>💾</span>Opslaan & Afsluiten
-            </button>
-            <button onClick={()=>trLogout()} title="Uitloggen" style={{background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.25)",borderRadius:10,cursor:"pointer",padding:"8px 12px",display:"flex",alignItems:"center",gap:6,color:"#F3EBDD",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:600}}>
-              <span style={{fontSize:14}}>🚪</span>Uitloggen
             </button>
           </div>
         </div>
