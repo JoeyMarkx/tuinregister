@@ -35,12 +35,10 @@
 </head>
 <body>
 <script>
-  // ── Auth guard: redirect naar index.html als niet ingelogd ──
-  if (!sessionStorage.getItem('tr_auth')) {
+  if(!sessionStorage.getItem('tr_auth')){
     window.location.replace('index.html');
   }
-  // ── Uitloggen helper ──
-  function trLogout() {
+  function trLogout(){
     sessionStorage.removeItem('tr_auth');
     window.location.href = 'index.html';
   }
@@ -1410,94 +1408,86 @@ function VeggieTab({veggies,setVeggies,onAfterAdd,hueCenter,hueWidth,onTrash}){
 // ═══════════════════════════════════════════════════════════════════
 // TAB: BEGROTING & BUDGET TRACKING
 // ═══════════════════════════════════════════════════════════════════
-const BEGROTING_CATS=[
-  "Planten & bollen","Bomen & struiken","Grond & mulch","Gereedschap","Bestrating & paden",
-  "Vijver & water","Verlichting","Meubels & decoratie","Hek & omheining","Kas & tunnel","Overig"
-];
+const BEGROTING_CATS=["Voorbereiding","Materialen","Uitbesteed","Onvoorzien"];
 const BUDGET_COLOR="#1a6b5a";
 const BUDGET_LIGHT="#d4f0ea";
 
 function BegrotingBudgetTab({begroting,setBegroting,budget,setBudget}){
-  const [view,setView]=useState("begroting"); // "begroting" | "tracking"
+  const [view,setView]=useState("begroting");
+  const VASTE_CATS=["Voorbereiding","Materialen","Uitbesteed"];
+  const catEmojis={"Voorbereiding":"🗂️","Materialen":"🌿","Uitbesteed":"🔨","Onvoorzien":"⚠️"};
+
   // ── BEGROTING state ──
-  const [bgForm,setBgForm]=useState({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:""});
+  const [bgForms,setBgForms]=useState({Voorbereiding:{omschrijving:"",bedrag:""},Materialen:{omschrijving:"",bedrag:""},Uitbesteed:{omschrijving:"",bedrag:""}});
   const [bgEditId,setBgEditId]=useState(null);
   const [bgEditForm,setBgEditForm]=useState({});
-  const fileRef=useRef();
+  const [onvoorzienPct,setOnvoorzienPct]=useState(()=>{try{return parseFloat(localStorage.getItem("tr_onvoorzien_pct")||"10");}catch{return 10;}});
+  useEffect(()=>{try{localStorage.setItem("tr_onvoorzien_pct",onvoorzienPct);}catch{};},[onvoorzienPct]);
 
   // ── BUDGET TRACKING state ──
-  const [btForm,setBtForm]=useState({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:"",datum:today(),nota:null});
+  const [btForm,setBtForm]=useState({omschrijving:"",categorie:"Voorbereiding",subpost:"",bedrag:"",datum:today(),nota:null});
   const [btPreview,setBtPreview]=useState(null);
-  const [btStep,setBtStep]=useState("form"); // "form" | "done"
   const [showBtAdd,setShowBtAdd]=useState(false);
+  const [btCatFilter,setBtCatFilter]=useState("alle");
   const btFileRef=useRef();
   const [btViewImg,setBtViewImg]=useState(null);
 
   // ── BEGROTING helpers ──
-  const bgTotal=begroting.reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0);
-  const bgByCat=BEGROTING_CATS.map(c=>({
-    cat:c,
-    items:begroting.filter(r=>r.categorie===c),
-    total:begroting.filter(r=>r.categorie===c).reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0)
-  })).filter(g=>g.items.length>0);
+  const bgSubtotaal=VASTE_CATS.reduce((s,c)=>s+begroting.filter(r=>r.categorie===c).reduce((ss,r)=>ss+(parseFloat(r.bedrag)||0),0),0);
+  const onvoorzienBedrag=bgSubtotaal*(onvoorzienPct/100);
+  const bgTotal=bgSubtotaal+onvoorzienBedrag;
+  const bgByCat=VASTE_CATS.map(c=>({cat:c,items:begroting.filter(r=>r.categorie===c),total:begroting.filter(r=>r.categorie===c).reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0)}));
 
-  function addBgItem(){
-    if(!bgForm.omschrijving.trim()||!bgForm.bedrag) return;
-    setBegroting(p=>[...p,{id:uid(),omschrijving:bgForm.omschrijving,categorie:bgForm.categorie,bedrag:parseFloat(bgForm.bedrag)||0}]);
-    setBgForm(p=>({...p,omschrijving:"",bedrag:""}));
+  function addBgItem(cat){
+    const f=bgForms[cat];
+    if(!f.omschrijving.trim()||!f.bedrag) return;
+    setBegroting(p=>[...p,{id:uid(),omschrijving:f.omschrijving,categorie:cat,bedrag:parseFloat(f.bedrag)||0}]);
+    setBgForms(p=>({...p,[cat]:{omschrijving:"",bedrag:""}}));
   }
   function delBgItem(id){setBegroting(p=>p.filter(r=>r.id!==id));}
-  function saveBgEdit(){
-    setBegroting(p=>p.map(r=>r.id===bgEditId?{...r,...bgEditForm}:r));
-    setBgEditId(null);
-  }
+  function saveBgEdit(){setBegroting(p=>p.map(r=>r.id===bgEditId?{...r,...bgEditForm}:r));setBgEditId(null);}
 
   // ── BUDGET TRACKING helpers ──
   const btTotal=budget.reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0);
-  const bgTotalForTrack=bgTotal;
+  const remaining=bgTotal-btTotal;
 
-  function handleNotaFile(e){
-    const f=e.target.files?.[0]; if(!f) return;
-    const r=new FileReader();
-    r.onload=ev=>{setBtForm(p=>({...p,nota:ev.target.result}));setBtPreview(ev.target.result);};
-    r.readAsDataURL(f);
-    e.target.value="";
-  }
+  // Per-cat budget vs spent
+  const catStats=VASTE_CATS.map(c=>{
+    const begroot=begroting.filter(r=>r.categorie===c).reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0);
+    const uitgegeven=budget.filter(r=>r.categorie===c).reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0);
+    return {cat:c,begroot,uitgegeven,over:uitgegeven>begroot};
+  });
+
+  function handleNotaFile(e){const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setBtForm(p=>({...p,nota:ev.target.result}));setBtPreview(ev.target.result);};r.readAsDataURL(f);e.target.value="";}
   function addBtItem(){
-    if(!btForm.omschrijving.trim()||!btForm.bedrag) return;
-    setBudget(p=>[...p,{id:uid(),omschrijving:btForm.omschrijving,categorie:btForm.categorie,bedrag:parseFloat(btForm.bedrag)||0,datum:btForm.datum,nota:btForm.nota||null}]);
-    setBtForm({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:"",datum:today(),nota:null});
+    if(!btForm.bedrag) return;
+    const omschrijving=btForm.omschrijving.trim()||btForm.subpost||btForm.categorie;
+    setBudget(p=>[...p,{id:uid(),omschrijving,categorie:btForm.categorie,subpost:btForm.subpost,bedrag:parseFloat(btForm.bedrag)||0,datum:btForm.datum,nota:btForm.nota||null}]);
+    setBtForm({omschrijving:"",categorie:"Voorbereiding",subpost:"",bedrag:"",datum:today(),nota:null});
     setBtPreview(null);
     setShowBtAdd(false);
   }
   function delBtItem(id){setBudget(p=>p.filter(r=>r.id!==id));}
 
-  const btByCat=BEGROTING_CATS.map(c=>({
-    cat:c,
-    items:budget.filter(r=>r.categorie===c),
-    total:budget.filter(r=>r.categorie===c).reduce((s,r)=>s+(parseFloat(r.bedrag)||0),0)
-  })).filter(g=>g.items.length>0);
+  // Posts in selected category for subpost dropdown
+  const subpostsForCat=(cat)=>begroting.filter(r=>r.categorie===cat).map(r=>r.omschrijving);
 
-  const remaining=bgTotal-btTotal;
+  // Filtered budget items
+  const btFiltered=btCatFilter==="alle"?budget:budget.filter(r=>r.categorie===btCatFilter);
 
   return(<div>
     {/* Toggle */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
       <div style={{display:"inline-flex",background:"#fff",border:`1px solid ${K.border}`,borderRadius:10,padding:3,gap:3}}>
         {[["begroting","📋 Begroting"],["tracking","💸 Budget tracking"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setView(v)} style={{
-            padding:"7px 16px",borderRadius:7,border:"none",cursor:"pointer",
-            background:view===v?BUDGET_COLOR:"transparent",
-            color:view===v?"#fff":K.muted,
-            fontSize:12,fontWeight:view===v?700:500,fontFamily:"inherit",transition:"all .15s"
-          }}>{l}</button>
+          <button key={v} onClick={()=>setView(v)} style={{padding:"7px 16px",borderRadius:7,border:"none",cursor:"pointer",background:view===v?BUDGET_COLOR:"transparent",color:view===v?"#fff":K.muted,fontSize:12,fontWeight:view===v?700:500,fontFamily:"inherit",transition:"all .15s"}}>{l}</button>
         ))}
       </div>
     </div>
 
     {/* ══ BEGROTING VIEW ══ */}
     {view==="begroting"&&<>
-      {/* Summary card */}
+      {/* Summary */}
       <div style={{background:BUDGET_COLOR,borderRadius:12,padding:"14px 18px",marginBottom:16,color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
           <div style={{fontSize:11,opacity:.75,fontWeight:600,letterSpacing:.5,textTransform:"uppercase"}}>Totaal begroot</div>
@@ -1506,163 +1496,319 @@ function BegrotingBudgetTab({begroting,setBegroting,budget,setBudget}){
         <div style={{fontSize:32,opacity:.4}}>📋</div>
       </div>
 
-      {/* Add form */}
-      <Card style={{marginBottom:16}}>
-        <div style={{fontSize:12,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Kostenpost toevoegen</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
-          <div style={{gridColumn:"1/-1"}}>
-            <Input label="Omschrijving" value={bgForm.omschrijving} onChange={e=>setBgForm(p=>({...p,omschrijving:e.target.value}))} placeholder="Bijv. Vaste planten vak A"/>
+      {/* Per-category cards with inline add form */}
+      {bgByCat.map(g=>(
+        <Card key={g.cat} style={{marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <span style={{fontSize:14,fontWeight:700,color:BUDGET_COLOR}}>{catEmojis[g.cat]} {g.cat}</span>
+            <span style={{fontSize:14,fontWeight:700,color:BUDGET_COLOR}}>€ {g.total.toFixed(2).replace(".",",")}</span>
           </div>
-          <Select label="Categorie" value={bgForm.categorie} onChange={e=>setBgForm(p=>({...p,categorie:e.target.value}))} options={BEGROTING_CATS.map(c=>({value:c,label:c}))}/>
-          <Input label="Bedrag (€)" type="number" min="0" step="0.01" value={bgForm.bedrag} onChange={e=>setBgForm(p=>({...p,bedrag:e.target.value}))} placeholder="0,00"/>
+          {/* Existing items */}
+          {g.items.length===0
+            ?<div style={{fontSize:12,color:K.muted,fontStyle:"italic",padding:"5px 8px",background:K.bL,borderRadius:6,textAlign:"center",marginBottom:8}}>Nog geen posten</div>
+            :<div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
+              {g.items.map(r=>(
+                <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:K.bL,borderRadius:7}}>
+                  {bgEditId===r.id
+                    ?<>
+                      <input value={bgEditForm.omschrijving||""} onChange={e=>setBgEditForm(p=>({...p,omschrijving:e.target.value}))} style={{flex:1,padding:"5px 8px",border:`1px solid ${K.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit"}}/>
+                      <input type="number" value={bgEditForm.bedrag||""} onChange={e=>setBgEditForm(p=>({...p,bedrag:e.target.value}))} style={{width:80,padding:"5px 8px",border:`1px solid ${K.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit"}}/>
+                      <button onClick={saveBgEdit} style={{padding:"4px 10px",borderRadius:6,border:"none",background:BUDGET_COLOR,color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✓</button>
+                      <button onClick={()=>setBgEditId(null)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+                    </>
+                    :<>
+                      <span style={{flex:1,fontSize:13,color:K.text}}>{r.omschrijving}</span>
+                      <span style={{fontSize:13,fontWeight:600,color:BUDGET_COLOR,minWidth:65,textAlign:"right"}}>€ {parseFloat(r.bedrag||0).toFixed(2).replace(".",",")}</span>
+                      <button onClick={()=>{setBgEditId(r.id);setBgEditForm({omschrijving:r.omschrijving,bedrag:r.bedrag});}} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.muted,display:"flex",alignItems:"center"}}><Icons.edit size={14}/></button>
+                      <button onClick={()=>delBgItem(r.id)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.danger,display:"flex",alignItems:"center"}}><Icons.trash size={14}/></button>
+                    </>
+                  }
+                </div>
+              ))}
+            </div>
+          }
+          {/* Inline add form per category */}
+          <div style={{background:"#f8f5f0",borderRadius:8,padding:"8px 10px",border:`1px dashed ${K.border}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Post toevoegen</div>
+            <div style={{display:"flex",gap:6,alignItems:"flex-end"}}>
+              <div style={{flex:1}}>
+                <input value={bgForms[g.cat].omschrijving} onChange={e=>setBgForms(p=>({...p,[g.cat]:{...p[g.cat],omschrijving:e.target.value}}))}
+                  placeholder="Omschrijving" style={{width:"100%",padding:"7px 10px",border:`1.5px solid ${K.border}`,borderRadius:7,fontSize:13,fontFamily:"inherit",background:"#fff",boxSizing:"border-box"}}/>
+              </div>
+              <div style={{width:88}}>
+                <input type="number" min="0" step="0.01" value={bgForms[g.cat].bedrag} onChange={e=>setBgForms(p=>({...p,[g.cat]:{...p[g.cat],bedrag:e.target.value}}))}
+                  placeholder="€ 0,00" style={{width:"100%",padding:"7px 10px",border:`1.5px solid ${K.border}`,borderRadius:7,fontSize:13,fontFamily:"inherit",background:"#fff",boxSizing:"border-box"}}/>
+              </div>
+              <button onClick={()=>addBgItem(g.cat)} disabled={!bgForms[g.cat].omschrijving.trim()||!bgForms[g.cat].bedrag}
+                style={{padding:"7px 14px",borderRadius:7,border:"none",background:BUDGET_COLOR,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:(!bgForms[g.cat].omschrijving.trim()||!bgForms[g.cat].bedrag)?.4:1,whiteSpace:"nowrap"}}>
+                + Toevoegen
+              </button>
+            </div>
+          </div>
+        </Card>
+      ))}
+
+      {/* Onvoorzien */}
+      <Card style={{marginBottom:12,border:`2px solid #e8a000`,background:"#fffbf0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <span style={{fontSize:14,fontWeight:700,color:"#b07000"}}>⚠️ Onvoorzien</span>
+          <span style={{fontSize:14,fontWeight:700,color:"#b07000"}}>€ {onvoorzienBedrag.toFixed(2).replace(".",",")}</span>
         </div>
-        <div style={{display:"flex",justifyContent:"flex-end",marginTop:4}}>
-          <Button onClick={addBgItem} style={{background:BUDGET_COLOR}} disabled={!bgForm.omschrijving.trim()||!bgForm.bedrag}><Icons.plus size={14}/>Toevoegen</Button>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{fontSize:12,color:"#b07000",fontWeight:600}}>% van subtotaal:</span>
+          {[5,10,15,20].map(pct=>(
+            <button key={pct} onClick={()=>setOnvoorzienPct(pct)} style={{padding:"4px 10px",borderRadius:6,border:"none",fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:600,background:onvoorzienPct===pct?"#e8a000":"#fff",color:onvoorzienPct===pct?"#fff":"#b07000",boxShadow:`0 0 0 1.5px ${onvoorzienPct===pct?"#e8a000":"#ddd"}`}}>{pct}%</button>
+          ))}
+          <div style={{display:"flex",alignItems:"center",gap:4}}>
+            <input type="number" min="0" max="100" step="1" value={onvoorzienPct} onChange={e=>setOnvoorzienPct(Math.max(0,Math.min(100,parseFloat(e.target.value)||0)))}
+              style={{width:52,padding:"4px 8px",border:"1.5px solid #ddd",borderRadius:6,fontSize:12,fontFamily:"inherit",textAlign:"center"}}/>
+            <span style={{fontSize:12,color:"#b07000",fontWeight:600}}>%</span>
+          </div>
+        </div>
+        <div style={{marginTop:8,fontSize:12,color:"#b07000",background:"#fff8e0",borderRadius:6,padding:"5px 10px"}}>
+          {onvoorzienPct}% van € {bgSubtotaal.toFixed(2).replace(".",",")} = <strong>€ {onvoorzienBedrag.toFixed(2).replace(".",",")}</strong>
         </div>
       </Card>
 
-      {/* Grouped by category */}
-      {begroting.length===0&&<Card><EmptyState icon={<span style={{fontSize:32}}>📋</span>} title="Geen kostenposten" sub="Voeg een kostenpost toe om te beginnen."/></Card>}
-      {bgByCat.map(g=>(
-        <Card key={g.cat} style={{marginBottom:10}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <span style={{fontSize:13,fontWeight:700,color:BUDGET_COLOR}}>{g.cat}</span>
-            <span style={{fontSize:13,fontWeight:700,color:BUDGET_COLOR}}>€ {g.total.toFixed(2).replace(".",",")}</span>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {g.items.map(r=>(
-              <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:K.bL,borderRadius:7}}>
-                {bgEditId===r.id
-                  ?<>
-                    <input value={bgEditForm.omschrijving||""} onChange={e=>setBgEditForm(p=>({...p,omschrijving:e.target.value}))}
-                      style={{flex:1,padding:"5px 8px",border:`1px solid ${K.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit"}}/>
-                    <input type="number" value={bgEditForm.bedrag||""} onChange={e=>setBgEditForm(p=>({...p,bedrag:e.target.value}))}
-                      style={{width:90,padding:"5px 8px",border:`1px solid ${K.border}`,borderRadius:6,fontSize:13,fontFamily:"inherit"}}/>
-                    <button onClick={saveBgEdit} style={{padding:"4px 10px",borderRadius:6,border:"none",background:BUDGET_COLOR,color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✓</button>
-                    <button onClick={()=>setBgEditId(null)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕</button>
-                  </>
-                  :<>
-                    <span style={{flex:1,fontSize:13,color:K.text}}>{r.omschrijving}</span>
-                    <span style={{fontSize:13,fontWeight:600,color:BUDGET_COLOR,minWidth:70,textAlign:"right"}}>€ {parseFloat(r.bedrag||0).toFixed(2).replace(".",",")}</span>
-                    <button onClick={()=>{setBgEditId(r.id);setBgEditForm({omschrijving:r.omschrijving,bedrag:r.bedrag});}} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.muted,display:"flex",alignItems:"center"}} title="Bewerken"><Icons.edit size={14}/></button>
-                    <button onClick={()=>delBgItem(r.id)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.danger,display:"flex",alignItems:"center"}} title="Verwijderen"><Icons.trash size={14}/></button>
-                  </>
-                }
-              </div>
-            ))}
-          </div>
-          <div style={{display:"flex",justifyContent:"flex-end",marginTop:6,paddingTop:6,borderTop:`1px solid ${K.border}`}}>
-            <span style={{fontSize:12,fontWeight:600,color:K.muted}}>Subtotaal: <strong style={{color:BUDGET_COLOR}}>€ {g.total.toFixed(2).replace(".",",")}</strong></span>
-          </div>
-        </Card>
-      ))}
-      {begroting.length>0&&<Card style={{background:BUDGET_COLOR,color:"#fff"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      {/* Totaalkaart */}
+      <Card style={{background:BUDGET_COLOR,color:"#fff",marginBottom:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <span style={{fontSize:14,fontWeight:700}}>🏷️ Totaal begroting</span>
           <span style={{fontSize:22,fontWeight:800}}>€ {bgTotal.toFixed(2).replace(".",",")}</span>
         </div>
-      </Card>}
+        <div style={{display:"flex",flexDirection:"column",gap:3,opacity:.88,fontSize:12}}>
+          {bgByCat.map(g=><div key={g.cat} style={{display:"flex",justifyContent:"space-between"}}><span>{catEmojis[g.cat]} {g.cat}</span><span>€ {g.total.toFixed(2).replace(".",",")}</span></div>)}
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>⚠️ Onvoorzien ({onvoorzienPct}%)</span><span>€ {onvoorzienBedrag.toFixed(2).replace(".",",")}</span></div>
+        </div>
+      </Card>
     </>}
 
     {/* ══ BUDGET TRACKING VIEW ══ */}
-    {view==="tracking"&&<>
-      {/* Summary cards */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
-        <div style={{background:BUDGET_COLOR,borderRadius:10,padding:"10px 12px",color:"#fff"}}>
-          <div style={{fontSize:9,opacity:.7,fontWeight:600,letterSpacing:.4,textTransform:"uppercase"}}>Begroot</div>
-          <div style={{fontSize:16,fontWeight:800,marginTop:2}}>€ {bgTotalForTrack.toFixed(2).replace(".",",")}</div>
-        </div>
-        <div style={{background:"#c44a2a",borderRadius:10,padding:"10px 12px",color:"#fff"}}>
-          <div style={{fontSize:9,opacity:.7,fontWeight:600,letterSpacing:.4,textTransform:"uppercase"}}>Uitgegeven</div>
-          <div style={{fontSize:16,fontWeight:800,marginTop:2}}>€ {btTotal.toFixed(2).replace(".",",")}</div>
-        </div>
-        <div style={{background:remaining>=0?"#2a6a20":"#8B2020",borderRadius:10,padding:"10px 12px",color:"#fff"}}>
-          <div style={{fontSize:9,opacity:.7,fontWeight:600,letterSpacing:.4,textTransform:"uppercase"}}>Resterend</div>
-          <div style={{fontSize:16,fontWeight:800,marginTop:2}}>€ {remaining.toFixed(2).replace(".",",")}</div>
-        </div>
-      </div>
+    {view==="tracking"&&(()=>{
+      // Inline add form state managed via btForm + showBtAdd (reuse existing state)
+      const SPEND_COLOR="#c44a2a";
+      const REST_POS="#2a6a20";
+      const REST_NEG="#8B2020";
 
-      {bgTotalForTrack>0&&<div style={{marginBottom:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:K.muted,marginBottom:4}}>
-          <span>Budget verbruikt</span>
-          <span>{Math.min(100,Math.round((btTotal/bgTotalForTrack)*100))}%</span>
+      // Column header
+      const ColHd=({children,right})=>(
+        <div style={{fontSize:10,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.4,textAlign:right?"right":"left",padding:"4px 8px",whiteSpace:"nowrap"}}>{children}</div>
+      );
+
+      return(<>
+        {/* Top totals strip */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+          {[
+            {label:"Totaal begroot",val:bgTotal,bg:BUDGET_COLOR},
+            {label:"Uitgegeven",val:btTotal,bg:SPEND_COLOR},
+            {label:remaining>=0?"Resterend":"Over budget",val:Math.abs(remaining),bg:remaining>=0?REST_POS:REST_NEG},
+          ].map(x=>(
+            <div key={x.label} style={{background:x.bg,borderRadius:10,padding:"10px 12px",color:"#fff"}}>
+              <div style={{fontSize:9,opacity:.75,fontWeight:600,letterSpacing:.4,textTransform:"uppercase"}}>{x.label}</div>
+              <div style={{fontSize:16,fontWeight:800,marginTop:2}}>€ {x.val.toFixed(2).replace(".",",")}</div>
+            </div>
+          ))}
         </div>
-        <div style={{height:10,background:K.border,borderRadius:6,overflow:"hidden"}}>
-          <div style={{height:"100%",width:`${Math.min(100,(btTotal/bgTotalForTrack)*100)}%`,background:btTotal>bgTotalForTrack?"#8B2020":BUDGET_COLOR,borderRadius:6,transition:"width .4s"}}/>
-        </div>
-      </div>}
 
-      {/* Add cost button */}
-      <Button onClick={()=>setShowBtAdd(true)} style={{background:BUDGET_COLOR,marginBottom:16,width:"100%",justifyContent:"center"}}><Icons.plus size={14}/>Kosten afschrijven</Button>
-
-      {budget.length===0&&<Card><EmptyState icon={<span style={{fontSize:32}}>💸</span>} title="Geen kosten geboekt" sub="Gebruik 'Kosten afschrijven' om een factuur of bonnetje te verwerken."/></Card>}
-
-      {/* Per category groups */}
-      {btByCat.map(g=>(
-        <Card key={g.cat} style={{marginBottom:10}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <span style={{fontSize:13,fontWeight:700,color:"#c44a2a"}}>{g.cat}</span>
-            <span style={{fontSize:13,fontWeight:700,color:"#c44a2a"}}>€ {g.total.toFixed(2).replace(".",",")}</span>
+        {/* Overall progress */}
+        {bgTotal>0&&<div style={{marginBottom:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:K.muted,marginBottom:4}}>
+            <span>Budget verbruikt</span><span>{Math.min(100,Math.round((btTotal/bgTotal)*100))}%</span>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {g.items.map(r=>(
-              <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:K.bL,borderRadius:7}}>
-                {r.nota&&<img src={r.nota} alt="nota" onClick={()=>setBtViewImg(r.nota)} style={{width:32,height:32,objectFit:"cover",borderRadius:5,cursor:"pointer",border:`1px solid ${K.border}`,flexShrink:0}}/>}
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:600,color:K.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.omschrijving}</div>
-                  <div style={{fontSize:11,color:K.muted}}>{r.datum}</div>
+          <div style={{height:8,background:K.border,borderRadius:5,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${Math.min(100,(btTotal/bgTotal)*100)}%`,background:btTotal>bgTotal?REST_NEG:BUDGET_COLOR,borderRadius:5,transition:"width .4s"}}/>
+          </div>
+        </div>}
+
+        {/* Per-category table */}
+        {catStats.map(cs=>{
+          const over=cs.uitgegeven>cs.begroot;
+          const rest=cs.begroot-cs.uitgegeven;
+          const pct=cs.begroot>0?Math.min(100,(cs.uitgegeven/cs.begroot)*100):0;
+          const posts=begroting.filter(r=>r.categorie===cs.cat);
+          const catBudgetItems=budget.filter(b=>b.categorie===cs.cat);
+
+          return(
+            <Card key={cs.cat} style={{marginBottom:10,border:`1.5px solid ${over?"#c44a2a":K.border}`}}>
+              {/* Category header row */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:8,alignItems:"center",marginBottom:8}}>
+                <span style={{fontSize:14,fontWeight:700,color:over?SPEND_COLOR:BUDGET_COLOR}}>{catEmojis[cs.cat]} {cs.cat}</span>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:9,color:K.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Begroot</div>
+                  <div style={{fontSize:13,fontWeight:700,color:BUDGET_COLOR}}>€ {cs.begroot.toFixed(2).replace(".",",")}</div>
                 </div>
-                <span style={{fontSize:13,fontWeight:600,color:"#c44a2a",minWidth:70,textAlign:"right"}}>€ {parseFloat(r.bedrag||0).toFixed(2).replace(".",",")}</span>
-                <button onClick={()=>delBtItem(r.id)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.danger,display:"flex",alignItems:"center"}} title="Verwijderen"><Icons.trash size={14}/></button>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:9,color:K.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Uitgegeven</div>
+                  <div style={{fontSize:13,fontWeight:700,color:cs.uitgegeven>0?SPEND_COLOR:K.muted}}>€ {cs.uitgegeven.toFixed(2).replace(".",",")}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:9,color:K.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{over?"Over!":"Over"}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:over?SPEND_COLOR:REST_POS}}>{over?"−":"+"} € {Math.abs(rest).toFixed(2).replace(".",",")}</div>
+                </div>
               </div>
-            ))}
+
+              {/* Progress bar */}
+              <div style={{height:6,background:K.border,borderRadius:4,overflow:"hidden",marginBottom:10}}>
+                <div style={{height:"100%",width:`${pct}%`,background:over?SPEND_COLOR:BUDGET_COLOR,borderRadius:4,transition:"width .4s"}}/>
+              </div>
+
+              {/* Per-post rows: each shows begroot / uitgegeven / rest + afschrijvingen eronder */}
+              {posts.map(r=>{
+                const postBegroot=parseFloat(r.bedrag||0);
+                const postItems=catBudgetItems.filter(b=>b.subpost===r.omschrijving);
+                const postSpent=postItems.reduce((s,b)=>s+(parseFloat(b.bedrag)||0),0);
+                const postRest=postBegroot-postSpent;
+                const postOver=postSpent>postBegroot;
+                return(
+                  <div key={r.id} style={{marginBottom:8,background:K.bL,borderRadius:8,overflow:"hidden"}}>
+                    {/* Post header */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:8,alignItems:"center",padding:"7px 10px",background:postOver?"#fde8e0":"#f0f5f2"}}>
+                      <span style={{fontSize:12,fontWeight:600,color:K.text}}>{r.omschrijving}</span>
+                      <span style={{fontSize:11,color:BUDGET_COLOR,fontWeight:600,textAlign:"right",minWidth:64}}>€ {postBegroot.toFixed(2).replace(".",",")}</span>
+                      <span style={{fontSize:11,color:postSpent>0?SPEND_COLOR:K.muted,fontWeight:600,textAlign:"right",minWidth:64}}>€ {postSpent.toFixed(2).replace(".",",")}</span>
+                      <span style={{fontSize:11,fontWeight:700,color:postOver?SPEND_COLOR:REST_POS,textAlign:"right",minWidth:64}}>{postOver?"−":"+"} € {Math.abs(postRest).toFixed(2).replace(".",",")}</span>
+                    </div>
+                    {/* Afschrijvingen voor deze post */}
+                    {postItems.map(b=>(
+                      <div key={b.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px 5px 18px",borderTop:`1px dotted ${K.border}`}}>
+                        {b.nota&&<img src={b.nota} alt="" onClick={()=>setBtViewImg(b.nota)} style={{width:22,height:22,objectFit:"cover",borderRadius:3,cursor:"pointer",border:`1px solid ${K.border}`,flexShrink:0}}/>}
+                        <span style={{flex:1,fontSize:11,color:K.muted}}>{b.omschrijving} <span style={{fontSize:10,opacity:.7}}>· {b.datum}</span></span>
+                        <span style={{fontSize:12,fontWeight:700,color:SPEND_COLOR}}>− € {parseFloat(b.bedrag||0).toFixed(2).replace(".",",")}</span>
+                        <button onClick={()=>delBtItem(b.id)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.danger,display:"flex",alignItems:"center"}}><Icons.trash size={12}/></button>
+                      </div>
+                    ))}
+                    {/* Inline afschrijf-formulier voor deze post */}
+                    {showBtAdd&&btForm.categorie===cs.cat&&btForm.subpost===r.omschrijving
+                      ?<div style={{padding:"8px 10px",borderTop:`1px solid ${K.border}`,background:"#fff"}}>
+                          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                            <input value={btForm.omschrijving} onChange={e=>setBtForm(p=>({...p,omschrijving:e.target.value}))}
+                              placeholder="Omschrijving (opt.)" style={{flex:1,minWidth:80,padding:"6px 8px",border:`1.5px solid ${K.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit"}}/>
+                            <input type="number" min="0" step="0.01" value={btForm.bedrag} onChange={e=>setBtForm(p=>({...p,bedrag:e.target.value}))}
+                              placeholder="€" style={{width:80,padding:"6px 8px",border:`1.5px solid ${K.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit"}}/>
+                            <input type="date" value={btForm.datum} onChange={e=>setBtForm(p=>({...p,datum:e.target.value}))}
+                              style={{width:110,padding:"6px 8px",border:`1.5px solid ${K.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit"}}/>
+                            {/* Nota upload */}
+                            <button onClick={()=>btFileRef.current?.click()} title="Bon toevoegen"
+                              style={{padding:"5px 8px",borderRadius:6,border:`1.5px solid ${K.border}`,background:"#fff",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center"}}>
+                              {btPreview?<img src={btPreview} style={{width:20,height:20,objectFit:"cover",borderRadius:3}}/>:<Icons.camera size={16} color={K.muted}/>}
+                            </button>
+                            <input ref={btFileRef} type="file" accept="image/*,application/pdf" capture="environment" onChange={handleNotaFile} style={{display:"none"}}/>
+                            <button onClick={addBtItem} disabled={!btForm.bedrag}
+                              style={{padding:"6px 12px",borderRadius:6,border:"none",background:SPEND_COLOR,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:!btForm.bedrag?.5:1}}>
+                              ✓ Afschrijven
+                            </button>
+                            <button onClick={()=>{setShowBtAdd(false);setBtForm(p=>({...p,bedrag:"",omschrijving:"",nota:null}));setBtPreview(null);}}
+                              style={{padding:"6px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+                          </div>
+                        </div>
+                      :<button onClick={()=>{setShowBtAdd(true);setBtForm(p=>({...p,categorie:cs.cat,subpost:r.omschrijving,bedrag:"",omschrijving:"",datum:today(),nota:null}));setBtPreview(null);}}
+                          style={{width:"100%",padding:"5px 10px",border:"none",background:"transparent",cursor:"pointer",fontSize:11,color:SPEND_COLOR,fontWeight:600,fontFamily:"inherit",textAlign:"left",borderTop:`1px dotted ${K.border}`,display:"flex",alignItems:"center",gap:4}}>
+                          <Icons.plus size={12} color={SPEND_COLOR}/>Afschrijven
+                        </button>
+                    }
+                  </div>
+                );
+              })}
+
+              {/* Algemene afschrijvingen (niet aan een post gekoppeld) */}
+              {(()=>{
+                const algemeen=catBudgetItems.filter(b=>!b.subpost||!posts.find(p=>p.omschrijving===b.subpost));
+                if(algemeen.length===0&&!(showBtAdd&&btForm.categorie===cs.cat&&!btForm.subpost)) return(
+                  <button onClick={()=>{setShowBtAdd(true);setBtForm(p=>({...p,categorie:cs.cat,subpost:"",bedrag:"",omschrijving:"",datum:today(),nota:null}));setBtPreview(null);}}
+                    style={{width:"100%",marginTop:6,padding:"6px 8px",border:`1px dashed ${K.border}`,borderRadius:7,background:"transparent",cursor:"pointer",fontSize:11,color:SPEND_COLOR,fontWeight:600,fontFamily:"inherit",display:"flex",alignItems:"center",gap:4}}>
+                    <Icons.plus size={12} color={SPEND_COLOR}/>Algemene afschrijving toevoegen
+                  </button>
+                );
+                return(
+                  <div style={{marginTop:6,background:K.bL,borderRadius:8,overflow:"hidden"}}>
+                    <div style={{padding:"6px 10px",background:"#f5f0eb",fontSize:11,fontWeight:600,color:K.muted}}>Algemeen</div>
+                    {algemeen.map(b=>(
+                      <div key={b.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",borderTop:`1px dotted ${K.border}`}}>
+                        {b.nota&&<img src={b.nota} alt="" onClick={()=>setBtViewImg(b.nota)} style={{width:22,height:22,objectFit:"cover",borderRadius:3,cursor:"pointer",border:`1px solid ${K.border}`,flexShrink:0}}/>}
+                        <span style={{flex:1,fontSize:11,color:K.muted}}>{b.omschrijving} <span style={{fontSize:10,opacity:.7}}>· {b.datum}</span></span>
+                        <span style={{fontSize:12,fontWeight:700,color:SPEND_COLOR}}>− € {parseFloat(b.bedrag||0).toFixed(2).replace(".",",")}</span>
+                        <button onClick={()=>delBtItem(b.id)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:K.danger,display:"flex",alignItems:"center"}}><Icons.trash size={12}/></button>
+                      </div>
+                    ))}
+                    {showBtAdd&&btForm.categorie===cs.cat&&!btForm.subpost
+                      ?<div style={{padding:"8px 10px",borderTop:`1px solid ${K.border}`,background:"#fff"}}>
+                          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                            <input value={btForm.omschrijving} onChange={e=>setBtForm(p=>({...p,omschrijving:e.target.value}))}
+                              placeholder="Omschrijving (opt.)" style={{flex:1,minWidth:80,padding:"6px 8px",border:`1.5px solid ${K.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit"}}/>
+                            <input type="number" min="0" step="0.01" value={btForm.bedrag} onChange={e=>setBtForm(p=>({...p,bedrag:e.target.value}))}
+                              placeholder="€" style={{width:80,padding:"6px 8px",border:`1.5px solid ${K.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit"}}/>
+                            <input type="date" value={btForm.datum} onChange={e=>setBtForm(p=>({...p,datum:e.target.value}))}
+                              style={{width:110,padding:"6px 8px",border:`1.5px solid ${K.border}`,borderRadius:6,fontSize:12,fontFamily:"inherit"}}/>
+                            <button onClick={()=>btFileRef.current?.click()} title="Bon"
+                              style={{padding:"5px 8px",borderRadius:6,border:`1.5px solid ${K.border}`,background:"#fff",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center"}}>
+                              {btPreview?<img src={btPreview} style={{width:20,height:20,objectFit:"cover",borderRadius:3}}/>:<Icons.camera size={16} color={K.muted}/>}
+                            </button>
+                            <input ref={btFileRef} type="file" accept="image/*,application/pdf" capture="environment" onChange={handleNotaFile} style={{display:"none"}}/>
+                            <button onClick={addBtItem} disabled={!btForm.bedrag}
+                              style={{padding:"6px 12px",borderRadius:6,border:"none",background:SPEND_COLOR,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:!btForm.bedrag?.5:1}}>
+                              ✓ Afschrijven
+                            </button>
+                            <button onClick={()=>{setShowBtAdd(false);setBtForm(p=>({...p,bedrag:"",omschrijving:"",nota:null}));setBtPreview(null);}}
+                              style={{padding:"6px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+                          </div>
+                        </div>
+                      :<button onClick={()=>{setShowBtAdd(true);setBtForm(p=>({...p,categorie:cs.cat,subpost:"",bedrag:"",omschrijving:"",datum:today(),nota:null}));setBtPreview(null);}}
+                          style={{width:"100%",padding:"5px 10px",border:"none",background:"transparent",cursor:"pointer",fontSize:11,color:SPEND_COLOR,fontWeight:600,fontFamily:"inherit",textAlign:"left",borderTop:`1px dotted ${K.border}`,display:"flex",alignItems:"center",gap:4}}>
+                          <Icons.plus size={12} color={SPEND_COLOR}/>Afschrijven
+                        </button>
+                    }
+                  </div>
+                );
+              })()}
+            </Card>
+          );
+        })}
+
+        {/* Onvoorzien card */}
+        <Card style={{background:"#fffbf0",border:"1.5px solid #e8a000",marginBottom:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:8,alignItems:"center"}}>
+            <span style={{fontSize:14,fontWeight:700,color:"#b07000"}}>⚠️ Onvoorzien ({onvoorzienPct}%)</span>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:9,color:"#b07000",fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Begroot</div>
+              <div style={{fontSize:13,fontWeight:700,color:"#b07000"}}>€ {onvoorzienBedrag.toFixed(2).replace(".",",")}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:9,color:"#b07000",fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Uitgegeven</div>
+              <div style={{fontSize:13,fontWeight:700,color:"#b07000"}}>—</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:9,color:"#b07000",fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Over</div>
+              <div style={{fontSize:13,fontWeight:700,color:REST_POS}}>+ € {onvoorzienBedrag.toFixed(2).replace(".",",")}</div>
+            </div>
           </div>
         </Card>
-      ))}
 
-      {budget.length>0&&<Card style={{background:"#c44a2a",color:"#fff"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:14,fontWeight:700}}>💸 Totaal uitgegeven</span>
-          <span style={{fontSize:22,fontWeight:800}}>€ {btTotal.toFixed(2).replace(".",",")}</span>
-        </div>
-      </Card>}
+        {/* Totaal footer */}
+        <Card style={{background:remaining>=0?BUDGET_COLOR:REST_NEG,color:"#fff"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:8,alignItems:"center"}}>
+            <span style={{fontSize:14,fontWeight:700}}>🏷️ Totaal</span>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:9,opacity:.75,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Begroot</div>
+              <div style={{fontSize:15,fontWeight:800}}>€ {bgTotal.toFixed(2).replace(".",",")}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:9,opacity:.75,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Uitgegeven</div>
+              <div style={{fontSize:15,fontWeight:800}}>€ {btTotal.toFixed(2).replace(".",",")}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:9,opacity:.75,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{remaining>=0?"Resterend":"Over budget"}</div>
+              <div style={{fontSize:15,fontWeight:800}}>{remaining>=0?"+":"−"} € {Math.abs(remaining).toFixed(2).replace(".",",")}</div>
+            </div>
+          </div>
+        </Card>
 
-      {/* Add cost modal */}
-      <Modal open={showBtAdd} onClose={()=>{setShowBtAdd(false);setBtForm({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:"",datum:today(),nota:null});setBtPreview(null);}} title="Kosten afschrijven">
-        <div style={{fontSize:13,color:K.muted,marginBottom:14}}>Voeg een factuur of bonnetje toe. Je kunt in meerdere stappen kosten afschrijven.</div>
-        {/* Receipt upload */}
-        <div style={{marginBottom:12}}>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:K.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:.3}}>Factuur / bonnetje (optioneel)</label>
-          {btPreview
-            ?<div style={{position:"relative",marginBottom:8}}>
-                <img src={btPreview} alt="" style={{width:"100%",maxHeight:180,objectFit:"contain",borderRadius:8,border:`1px solid ${K.border}`,background:"#f5f5f5"}}/>
-                <button onClick={()=>{setBtPreview(null);setBtForm(p=>({...p,nota:null}));}} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.55)",border:"none",borderRadius:"50%",width:26,height:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.x size={13} color="#fff"/></button>
-              </div>
-            :<div onClick={()=>btFileRef.current?.click()} style={{width:"100%",padding:"18px 0",borderRadius:8,border:`2px dashed ${K.border}`,display:"flex",flexDirection:"column",alignItems:"center",gap:6,cursor:"pointer",background:K.bL,marginBottom:8}}>
-                <Icons.camera size={24} color={K.muted}/>
-                <span style={{fontSize:12,color:K.muted}}>Klik om foto/scan toe te voegen</span>
-              </div>
-          }
-          <input ref={btFileRef} type="file" accept="image/*,application/pdf" capture="environment" onChange={handleNotaFile} style={{display:"none"}}/>
-        </div>
-        <Input label="Omschrijving" value={btForm.omschrijving} onChange={e=>setBtForm(p=>({...p,omschrijving:e.target.value}))} placeholder="Bijv. Planten Kwekerij Jansen"/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Input label="Bedrag (€)" type="number" min="0" step="0.01" value={btForm.bedrag} onChange={e=>setBtForm(p=>({...p,bedrag:e.target.value}))} placeholder="0,00"/>
-          <Input label="Datum" type="date" value={btForm.datum} onChange={e=>setBtForm(p=>({...p,datum:e.target.value}))}/>
-        </div>
-        <Select label="Categorie" value={btForm.categorie} onChange={e=>setBtForm(p=>({...p,categorie:e.target.value}))} options={BEGROTING_CATS.map(c=>({value:c,label:c}))}/>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-          <Button variant="secondary" onClick={()=>{setShowBtAdd(false);setBtForm({omschrijving:"",categorie:BEGROTING_CATS[0],bedrag:"",datum:today(),nota:null});setBtPreview(null);}}>Annuleren</Button>
-          <Button onClick={addBtItem} style={{background:"#c44a2a"}} disabled={!btForm.omschrijving.trim()||!btForm.bedrag}><Icons.check size={14}/>Afschrijven</Button>
-        </div>
-      </Modal>
-
-      {/* Image lightbox for nota */}
-      {btViewImg&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.88)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setBtViewImg(null)}>
-        <img src={btViewImg} alt="" style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:8,objectFit:"contain"}}/>
-        <button onClick={()=>setBtViewImg(null)} style={{position:"absolute",top:14,right:14,background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:34,height:34,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.x color="#fff"/></button>
-      </div>}
-    </>}
+        {/* Image lightbox */}
+        {btViewImg&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.88)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setBtViewImg(null)}>
+          <img src={btViewImg} alt="" style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:8,objectFit:"contain"}}/>
+          <button onClick={()=>setBtViewImg(null)} style={{position:"absolute",top:14,right:14,background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:34,height:34,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.x color="#fff"/></button>
+        </div>}
+      </>);
+    })()}
   </div>);
 }
 
@@ -1773,13 +1919,61 @@ function MoodboardWishlistTab({wishlist,setWishlist,moodboard,setMoodboard}){
   const [showAdd,setShowAdd]=useState(false);
   const [search,setSearch]=useState("");
   const [selected,setSelected]=useState(null);
-  const [form,setForm]=useState({naam:"",latijn:"",categorie:"",notitie:"",photo:null});
+  const [form,setForm]=useState({naam:"",latijn:"",categorie:"",notitie:"",photo:null,posX:50,posY:50,prijs:"",maat:""});
   const [imgPreview,setImgPreview]=useState(null);
   const fr=React.useRef();
   const WCATS=["Sierplant","Bol/knol","Boom/struik","Vijverplant","Moestuin","Anders"];
+  const MAATOPTIES=["P9","P11","P12","P13","P14","P15","P17","P19","P23","C1","C2","C3","C5","C7.5","C10","C12","Kluit","Eigen maat"];
+  const [maatCustom,setMaatCustom]=useState("");
+  // Wishlist crop state
+  const [wCropData,setWCropData]=useState(null); // {dataUrl, posX, posY, dragging, ...}
+  const wCropRef=React.useRef();
 
-  function handleImg(e){const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImgPreview(ev.target.result);setForm(p=>({...p,photo:ev.target.result}));};r.readAsDataURL(f);e.target.value="";}
-  function saveWish(){if(!form.naam.trim())return;setWishlist(p=>[...p,{id:Date.now(),...form}]);setForm({naam:"",latijn:"",categorie:"",notitie:"",photo:null});setImgPreview(null);setShowAdd(false);}
+  function handleImg(e){
+    const f=e.target.files?.[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      setWCropData({dataUrl:ev.target.result,posX:50,posY:50,dragging:false,dragStartX:0,dragStartY:0,startPosX:50,startPosY:50});
+    };
+    r.readAsDataURL(f);
+    e.target.value="";
+  }
+  function wCropPointerDown(e){
+    e.preventDefault();
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    setWCropData(p=>({...p,dragging:true,dragStartX:cx,dragStartY:cy,startPosX:p.posX,startPosY:p.posY}));
+  }
+  function wCropPointerMove(e){
+    if(!wCropData?.dragging)return;
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    const el=wCropRef.current;if(!el)return;
+    const rect=el.getBoundingClientRect();
+    const dx=((cx-wCropData.dragStartX)/rect.width)*100;
+    const dy=((cy-wCropData.dragStartY)/rect.height)*100;
+    const nx=Math.max(0,Math.min(100,wCropData.startPosX-dx));
+    const ny=Math.max(0,Math.min(100,wCropData.startPosY-dy));
+    setWCropData(p=>({...p,posX:nx,posY:ny}));
+  }
+  function wCropPointerUp(){setWCropData(p=>p?({...p,dragging:false}):null);}
+  function wCropConfirm(){
+    if(!wCropData)return;
+    setImgPreview(wCropData.dataUrl);
+    setForm(p=>({...p,photo:wCropData.dataUrl,posX:wCropData.posX,posY:wCropData.posY}));
+    setWCropData(null);
+  }
+  function wCropCancel(){setWCropData(null);}
+
+  function saveWish(){
+    if(!form.naam.trim())return;
+    const maatVal=form.maat==="Eigen maat"?maatCustom:form.maat;
+    setWishlist(p=>[...p,{id:Date.now(),...form,maat:maatVal}]);
+    setForm({naam:"",latijn:"",categorie:"",notitie:"",photo:null,posX:50,posY:50,prijs:"",maat:""});
+    setMaatCustom("");
+    setImgPreview(null);
+    setShowAdd(false);
+  }
   function del(id){setWishlist(p=>p.filter(x=>x.id!==id));setSelected(null);}
   function markDone(id){setWishlist(p=>p.map(x=>x.id===id?{...x,done:!x.done}:x));}
   const flt=wishlist.filter(w=>{const q=search.toLowerCase();return!q||w.naam?.toLowerCase().includes(q)||w.latijn?.toLowerCase().includes(q)||w.categorie?.toLowerCase().includes(q);});
@@ -1822,9 +2016,9 @@ function MoodboardWishlistTab({wishlist,setWishlist,moodboard,setMoodboard}){
 
       {moodboard.length===0&&<Card><EmptyState icon={<Icons.camera size={32} color={K.wish}/>} title="Nog geen moodboard foto's" sub="Voeg foto's toe die je inspireren voor je tuin."/></Card>}
 
-      {/* Instagram-style square grid */}
+      {/* 5-column photo grid */}
       {mbFiltered.length>0&&<>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:3,marginBottom:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:3,marginBottom:16}}>
           {mbFiltered.map(m=>(
             <div key={m.id} style={{position:"relative",paddingBottom:"100%",cursor:"pointer",borderRadius:4,overflow:"hidden"}}
               onMouseEnter={e=>{const ov=e.currentTarget.querySelector(".mb-overlay");if(ov)ov.style.opacity="1";}}
@@ -1960,34 +2154,84 @@ function MoodboardWishlistTab({wishlist,setWishlist,moodboard,setMoodboard}){
       {open.length===0&&done.length===0&&<Card><EmptyState icon={<Icons.heart size={32} color={K.wish}/>} title="Je wishlist is leeg" sub="Voeg soorten toe die je nog wilt aanschaffen."/></Card>}
       {open.length>0&&<>
         <div style={{fontSize:12,fontWeight:700,color:K.wish,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>🌱 Nog te verkrijgen ({open.length})</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12,marginBottom:24}}>
-          {open.map(w=><Card key={w.id} onClick={()=>setSelected(w)} style={{cursor:"pointer",borderLeft:`3px solid ${K.wish}`}}>
-            {w.photo&&<div style={{width:"100%",height:130,borderRadius:8,overflow:"hidden",marginBottom:8}}><img src={w.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>}
-            <div style={{fontSize:15,fontWeight:600,color:K.text}}>{w.naam}</div>
-            {w.latijn&&<div style={{fontSize:12,color:K.muted,fontStyle:"italic"}}>{w.latijn}</div>}
-            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:5}}>
-              {w.categorie&&<Badge color={K.wish} bg={K.wishL}>{w.categorie}</Badge>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:3,marginBottom:24}}>
+          {open.map(w=>(
+            <div key={w.id} onClick={()=>setSelected(w)} style={{cursor:"pointer"}}>
+              {/* Square photo */}
+              <div style={{position:"relative",paddingBottom:"100%",borderRadius:4,overflow:"hidden",background:K.wishL}}>
+                <div style={{position:"absolute",inset:0}}>
+                  {w.photo
+                    ?<img src={w.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`${w.posX??50}% ${w.posY??50}%`,display:"block"}}/>
+                    :<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.heart size={20} color={K.wish}/></div>
+                  }
+                </div>
+              </div>
+              {/* Name + latin directly below */}
+              <div style={{padding:"4px 2px 6px"}}>
+                <div style={{fontSize:10,fontWeight:700,color:K.text,lineHeight:1.25,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{w.naam}</div>
+                {w.latijn&&<div style={{fontSize:9,color:K.muted,fontStyle:"italic",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{w.latijn}</div>}
+                <div style={{display:"flex",gap:2,flexWrap:"wrap",marginTop:2}}>
+                  {w.maat&&<span style={{fontSize:8,fontWeight:700,background:K.bL,color:K.accent,borderRadius:3,padding:"1px 4px"}}>{w.maat}</span>}
+                  {w.prijs&&<span style={{fontSize:8,fontWeight:700,background:"#e8f5e9",color:"#2a6a20",borderRadius:3,padding:"1px 4px"}}>€{w.prijs}</span>}
+                </div>
+              </div>
             </div>
-            {w.notitie&&<div style={{fontSize:12,color:K.muted,marginTop:5,fontStyle:"italic"}}>"{w.notitie}"</div>}
-          </Card>)}
+          ))}
         </div>
       </>}
       {done.length>0&&<>
         <div style={{fontSize:12,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>✓ Verkregen ({done.length})</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12}}>
-          {done.map(w=><Card key={w.id} onClick={()=>setSelected(w)} style={{cursor:"pointer",borderLeft:`3px solid ${K.muted}`,opacity:.7}}>
-            <div style={{fontSize:15,fontWeight:600,color:K.muted,textDecoration:"line-through"}}>{w.naam}</div>
-            {w.categorie&&<Badge color={K.muted} bg={K.bL}>{w.categorie}</Badge>}
-          </Card>)}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:3,marginBottom:16}}>
+          {done.map(w=>(
+            <div key={w.id} onClick={()=>setSelected(w)} style={{cursor:"pointer",opacity:.55}}>
+              <div style={{position:"relative",paddingBottom:"100%",borderRadius:4,overflow:"hidden",background:K.bL}}>
+                <div style={{position:"absolute",inset:0}}>
+                  {w.photo
+                    ?<img src={w.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`${w.posX??50}% ${w.posY??50}%`,display:"block",filter:"grayscale(60%)"}}/>
+                    :<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}><Icons.check size={18} color={K.muted}/></div>
+                  }
+                </div>
+              </div>
+              <div style={{padding:"4px 2px 6px"}}>
+                <div style={{fontSize:10,fontWeight:700,color:K.muted,textDecoration:"line-through",lineHeight:1.25}}>{w.naam}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </>}
+
+      {/* Wishlist crop overlay */}
+      {wCropData&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.92)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:16}}>
+        <div style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:6,textAlign:"center"}}>📐 Kadering instellen</div>
+        <div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginBottom:14,textAlign:"center"}}>Sleep de foto om het zichtbare deel te kiezen</div>
+        <div
+          ref={wCropRef}
+          onMouseDown={wCropPointerDown} onMouseMove={wCropPointerMove} onMouseUp={wCropPointerUp} onMouseLeave={wCropPointerUp}
+          onTouchStart={wCropPointerDown} onTouchMove={wCropPointerMove} onTouchEnd={wCropPointerUp}
+          style={{width:Math.min(280,window.innerWidth-48),height:Math.min(280,window.innerWidth-48),borderRadius:10,overflow:"hidden",cursor:"grab",border:"3px solid #fff",flexShrink:0,userSelect:"none",position:"relative",background:"#222"}}>
+          <img src={wCropData.dataUrl} alt="" draggable={false}
+            style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`${wCropData.posX}% ${wCropData.posY}%`,display:"block",pointerEvents:"none",userSelect:"none"}}/>
+          <div style={{position:"absolute",inset:0,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center",opacity:.2}}>
+            <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:1,background:"#fff",transform:"translateX(-50%)"}}/>
+            <div style={{position:"absolute",top:"50%",left:0,right:0,height:1,background:"#fff",transform:"translateY(-50%)"}}/>
+          </div>
+        </div>
+        <div style={{color:"rgba(255,255,255,.4)",fontSize:10,marginTop:8,fontFamily:"monospace"}}>positie: {Math.round(wCropData.posX)}% / {Math.round(wCropData.posY)}%</div>
+        <div style={{display:"flex",gap:10,marginTop:16,flexWrap:"wrap",justifyContent:"center"}}>
+          <button onClick={wCropCancel} style={{padding:"8px 18px",borderRadius:8,border:"1px solid rgba(255,255,255,.3)",background:"transparent",color:"rgba(255,255,255,.7)",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>✕ Annuleren</button>
+          <button onClick={wCropConfirm} style={{padding:"8px 22px",borderRadius:8,border:"none",background:K.wish,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ Opslaan</button>
+        </div>
+      </div>}
+
       <Modal open={!!selected} onClose={()=>setSelected(null)} title={selected?.naam||""} wide>
         {selected&&<div>
-          {selected.photo&&<img src={selected.photo} alt="" style={{width:"100%",maxHeight:220,objectFit:"cover",borderRadius:10,marginBottom:16}}/>}
+          {selected.photo&&<div style={{width:"100%",aspectRatio:"1",borderRadius:10,overflow:"hidden",marginBottom:16}}><img src={selected.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`${selected.posX??50}% ${selected.posY??50}%`}}/></div>}
           {selected.latijn&&<div style={{fontSize:14,fontStyle:"italic",color:K.muted,marginBottom:8}}>{selected.latijn}</div>}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
             {selected.categorie&&<div style={{padding:"8px 12px",background:K.wishL,borderRadius:8}}><div style={{fontSize:11,fontWeight:600,color:K.muted,textTransform:"uppercase",letterSpacing:.3}}>Categorie</div><div style={{fontSize:14,color:K.text,marginTop:2}}>{selected.categorie}</div></div>}
             <div style={{padding:"8px 12px",background:K.bL,borderRadius:8}}><div style={{fontSize:11,fontWeight:600,color:K.muted,textTransform:"uppercase",letterSpacing:.3}}>Status</div><div style={{fontSize:14,color:K.text,marginTop:2}}>{selected.done?"Verkregen ✓":"Nog te verkrijgen"}</div></div>
+            {selected.maat&&<div style={{padding:"8px 12px",background:K.bL,borderRadius:8}}><div style={{fontSize:11,fontWeight:600,color:K.muted,textTransform:"uppercase",letterSpacing:.3}}>Maat</div><div style={{fontSize:14,color:K.text,marginTop:2}}>{selected.maat}</div></div>}
+            {selected.prijs&&<div style={{padding:"8px 12px",background:"#e8f5e9",borderRadius:8}}><div style={{fontSize:11,fontWeight:600,color:K.muted,textTransform:"uppercase",letterSpacing:.3}}>Indicatieprijs</div><div style={{fontSize:14,color:"#2a6a20",marginTop:2,fontWeight:700}}>€ {selected.prijs}</div></div>}
           </div>
           {selected.notitie&&<div style={{padding:"10px 14px",background:K.warmLight,borderRadius:8,marginBottom:16,fontSize:13,color:K.text,fontStyle:"italic"}}>"{selected.notitie}"</div>}
           <div style={{display:"flex",gap:8,justifyContent:"space-between",flexWrap:"wrap"}}>
@@ -1996,25 +2240,37 @@ function MoodboardWishlistTab({wishlist,setWishlist,moodboard,setMoodboard}){
           </div>
         </div>}
       </Modal>
-      <Modal open={showAdd} onClose={()=>{setShowAdd(false);setImgPreview(null);setForm({naam:"",latijn:"",categorie:"",notitie:"",photo:null});}} title="Soort toevoegen aan wishlist">
+      <Modal open={showAdd} onClose={()=>{setShowAdd(false);setImgPreview(null);setForm({naam:"",latijn:"",categorie:"",notitie:"",photo:null,posX:50,posY:50,prijs:"",maat:""});setMaatCustom("");setWCropData(null);}} title="Soort toevoegen aan wishlist">
         <div style={{marginBottom:12}}>
           <label style={{display:"block",fontSize:12,fontWeight:600,color:K.muted,marginBottom:4,letterSpacing:.3,textTransform:"uppercase"}}>Foto (optioneel)</label>
           <input ref={fr} type="file" accept="image/*" capture="environment" onChange={handleImg} style={{display:"none"}}/>
           {imgPreview
-            ?<div style={{position:"relative",width:"100%",height:160,borderRadius:10,overflow:"hidden",marginBottom:4}}>
-              <img src={imgPreview} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              <button onClick={()=>{setImgPreview(null);setForm(p=>({...p,photo:null}));}} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.5)",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer",color:"#fff",fontSize:14}}>✕</button>
+            ?<div style={{position:"relative",width:"100%",aspectRatio:"1",borderRadius:10,overflow:"hidden",marginBottom:8}}>
+              <img src={imgPreview} alt="" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:`${form.posX??50}% ${form.posY??50}%`}}/>
+              <button onClick={()=>{setImgPreview(null);setForm(p=>({...p,photo:null,posX:50,posY:50}));}} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.5)",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer",color:"#fff",fontSize:14}}>✕</button>
             </div>
             :<div onClick={()=>fr.current?.click()} style={{width:"100%",height:100,borderRadius:10,border:`2px dashed ${K.wish}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",background:K.wishL,gap:6}}>
               <Icons.camera size={24} color={K.wish}/><span style={{fontSize:12,color:K.wish,fontWeight:600}}>Foto toevoegen</span>
             </div>}
         </div>
-        <Input label="Naam *" value={form.naam} onChange={e=>setForm(p=>({...p,naam:e.target.value}))} placeholder="Bijv. Paeonia lactiflora"/>
+        <Input label="Naam *" value={form.naam} onChange={e=>setForm(p=>({...p,naam:e.target.value}))} placeholder="Bijv. Pioenroos"/>
         <Input label="Latijnse naam" value={form.latijn} onChange={e=>setForm(p=>({...p,latijn:e.target.value}))} placeholder="Bijv. Paeonia lactiflora"/>
         <Select label="Categorie" value={form.categorie} onChange={e=>setForm(p=>({...p,categorie:e.target.value}))} options={[{value:"",label:"— Kies categorie —"},...WCATS]}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Input label="Indicatieprijs (€)" type="number" min="0" step="0.01" value={form.prijs} onChange={e=>setForm(p=>({...p,prijs:e.target.value}))} placeholder="0,00"/>
+          <div style={{marginBottom:12}}>
+            <label style={{display:"block",fontSize:12,fontWeight:600,color:K.muted,marginBottom:4,letterSpacing:.3,textTransform:"uppercase"}}>Maat / pot</label>
+            <select value={form.maat} onChange={e=>setForm(p=>({...p,maat:e.target.value}))}
+              style={{width:"100%",padding:"9px 12px",border:`2px solid ${K.border}`,borderRadius:8,fontSize:14,fontFamily:"inherit",background:"#fff",color:K.text,boxSizing:"border-box"}}>
+              <option value="">— Kies maat —</option>
+              {MAATOPTIES.map(m=><option key={m} value={m}>{m}</option>)}
+            </select>
+            {form.maat==="Eigen maat"&&<input value={maatCustom} onChange={e=>setMaatCustom(e.target.value)} placeholder="Bijv. 3L pot" style={{width:"100%",marginTop:6,padding:"9px 12px",border:`2px solid ${K.border}`,borderRadius:8,fontSize:14,fontFamily:"inherit",background:"#fff",color:K.text,boxSizing:"border-box"}}/>}
+          </div>
+        </div>
         <TextArea label="Notitie" value={form.notitie} onChange={e=>setForm(p=>({...p,notitie:e.target.value}))} placeholder="Bijv. gezien bij tuincentrum..."/>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-          <Button variant="secondary" onClick={()=>{setShowAdd(false);setImgPreview(null);setForm({naam:"",latijn:"",categorie:"",notitie:"",photo:null});}}>Annuleren</Button>
+          <Button variant="secondary" onClick={()=>{setShowAdd(false);setImgPreview(null);setForm({naam:"",latijn:"",categorie:"",notitie:"",photo:null,posX:50,posY:50,prijs:"",maat:""});setMaatCustom("");setWCropData(null);}}>Annuleren</Button>
           <Button onClick={saveWish} disabled={!form.naam.trim()} style={{background:K.wish}}><Icons.plus size={14}/>Toevoegen</Button>
         </div>
       </Modal>
@@ -4295,214 +4551,248 @@ function PlattegrondTab({gardenMap,setGardenMap,allPlants,plants,bulbs,trees,pon
 // ═══════════════════════════════════════════════════════════════════
 // FOTOJOURNAAL TAB
 // ═══════════════════════════════════════════════════════════════════
-function FotojournaalTab({journal,setJournal}){
+function FotojournaalTab({journal,setJournal,logboek,setLogboek,tasks,setTasks}){
+  const [view,setView]=useState("logboek");
+  const today_str=today();
+
+  // ─── LOGBOEK ───
+  const WEER=["☀️ Zonnig","⛅ Bewolkt","🌧 Regenachtig","🌩 Onweer","❄️ Vorst","🌬 Winderig","🌫 Mistig"];
+  const ACTIVITEITEN_OPTS=["Zaaien","Verspenen","Uitplanten","Snoeien","Bemesten","Wieden","Gieten","Oogsten","Maaien","Poten/planten","Mulchen","Spuiten","Rooien","Zaad verzamelen","Composteren","Opruimen","Andere"];
+  const [showLogAdd,setShowLogAdd]=useState(false);
+  const [logForm,setLogForm]=useState({datum:today_str,titel:"",notitie:"",weer:"",activiteiten:[],aantallen:""});
+  const [logFilter,setLogFilter]=useState("");
+  const [logSelected,setLogSelected]=useState(null);
+
+  function toggleAct(a){setLogForm(p=>({...p,activiteiten:p.activiteiten.includes(a)?p.activiteiten.filter(x=>x!==a):[...p.activiteiten,a]}))}
+  function saveLog(){
+    if(!logForm.notitie.trim()&&!logForm.titel.trim())return;
+    setLogboek(p=>[{id:uid(),...logForm},...p].sort((a,b)=>b.datum.localeCompare(a.datum)));
+    setLogForm({datum:today_str,titel:"",notitie:"",weer:"",activiteiten:[],aantallen:""});
+    setShowLogAdd(false);
+  }
+  function delLog(id){setLogboek(p=>p.filter(e=>e.id!==id));setLogSelected(null);}
+
+  const logFiltered=logFilter.trim()?logboek.filter(e=>(e.titel+e.notitie+e.weer+(e.activiteiten||[]).join(" ")).toLowerCase().includes(logFilter.toLowerCase())):logboek;
+  const logByMonth=logFiltered.reduce((acc,e)=>{const m=e.datum.slice(0,7);if(!acc[m])acc[m]=[];acc[m].push(e);return acc;},{});
+  const MAANDEN=["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
+  function maandLabel(ym){const[y,m]=ym.split("-");return `${MAANDEN[parseInt(m)-1]} ${y}`;}
+
+  // ─── FOTODAGBOEK ───
   const [showCapture,setShowCapture]=useState(false);
-  const [spots,setSpots]=useState(()=>{
-    // spots are stored inside journal as a separate key
-    try{const v=localStorage.getItem("tr_spots");return v?JSON.parse(v):[];}catch(e){return [];}
-  });
-  const [selectedSpot,setSelectedSpot]=useState(null);
+  const [spots,setSpots]=useState(()=>{try{const v=localStorage.getItem("tr_spots");return v?JSON.parse(v):[];}catch(e){return [];}});
   const [showAddSpot,setShowAddSpot]=useState(false);
   const [spotForm,setSpotForm]=useState({naam:"",beschrijving:"",referencePhoto:null});
   const [captureSpot,setCaptureSpot]=useState(null);
   const [capturePhoto,setCapturePhoto]=useState(null);
-  const [showTimelapse,setShowTimelapse]=useState(null); // spot id
+  const [showTimelapse,setShowTimelapse]=useState(null);
   const [tlFrame,setTlFrame]=useState(0);
-  const tlRef=useRef();
   const frRef=useRef();
   const capRef=useRef();
-  const today_str=today();
 
-  // Save spots separately
-  useEffect(()=>{try{localStorage.setItem("tr_spots",JSON.stringify(spots));}catch(e){};},[spots]);
+  // ─── HERINNERING ───
+  const [reminderEnabled,setReminderEnabled]=useState(()=>{try{return JSON.parse(localStorage.getItem("tr_reminder_on")||"false");}catch{return false;}});
+  const [reminderTime,setReminderTime]=useState(()=>localStorage.getItem("tr_reminder_time")||"09:00");
+  const [notifPerm,setNotifPerm]=useState(()=>typeof Notification!=="undefined"?Notification.permission:"denied");
+  const [showReminderSettings,setShowReminderSettings]=useState(false);
 
-  function handleSpotPhoto(e,setter){
-    const f=e.target.files?.[0];if(!f)return;
-    const r=new FileReader();r.onload=ev=>setter(ev.target.result);r.readAsDataURL(f);e.target.value="";
-  }
-
-  function saveSpot(){
-    if(!spotForm.naam.trim()) return;
-    setSpots(prev=>[...prev,{id:uid(),naam:spotForm.naam,beschrijving:spotForm.beschrijving,referencePhoto:spotForm.referencePhoto,created:today_str}]);
-    setSpotForm({naam:"",beschrijving:"",referencePhoto:null});
-    setShowAddSpot(false);
-  }
-
-  function savePhoto(){
-    if(!capturePhoto||!captureSpot) return;
-    setJournal(prev=>[...prev,{id:uid(),spotId:captureSpot.id,date:today_str,photo:capturePhoto,time:new Date().toLocaleTimeString("nl",{hour:"2-digit",minute:"2-digit"})}]);
-    setCapturePhoto(null);
-    setCaptureSpot(null);
-    setShowCapture(false);
-  }
-
-  function deleteEntry(id){setJournal(prev=>prev.filter(e=>e.id!==id));}
-  function deleteSpot(id){
-    setSpots(prev=>prev.filter(s=>s.id!==id));
-    setJournal(prev=>prev.filter(e=>e.spotId!==id));
-  }
-
-  // Timelapse viewer
-  function startTimelapse(spot){
-    setShowTimelapse(spot.id);
-    setTlFrame(0);
-  }
-  const tlEntries=showTimelapse?journal.filter(e=>e.spotId===showTimelapse).sort((a,b)=>a.date.localeCompare(b.date)):[];
+  useEffect(()=>{localStorage.setItem("tr_spots",JSON.stringify(spots));},[spots]);
+  useEffect(()=>{localStorage.setItem("tr_reminder_on",JSON.stringify(reminderEnabled));},[reminderEnabled]);
+  useEffect(()=>{localStorage.setItem("tr_reminder_time",reminderTime);},[reminderTime]);
 
   useEffect(()=>{
-    if(!showTimelapse||tlEntries.length===0) return;
-    const iv=setInterval(()=>setTlFrame(f=>(f+1)%tlEntries.length),800);
+    if(!reminderEnabled)return;
+    function check(){
+      const now=new Date();
+      const hm=now.getHours().toString().padStart(2,"0")+":"+now.getMinutes().toString().padStart(2,"0");
+      const todayKey=today_str+"_"+reminderTime;
+      const lastFired=localStorage.getItem("tr_reminder_last");
+      if(hm===reminderTime&&lastFired!==todayKey){
+        localStorage.setItem("tr_reminder_last",todayKey);
+        if(notifPerm==="granted"){try{new Notification("📷 TuinRegister — Dagelijkse tuinfoto",{body:"Vergeet niet je dagelijkse tuinfoto's te maken!"});}catch(e){}}
+        const taskTitle="📷 Dagelijkse tuinfoto maken";
+        setTasks(prev=>{
+          if(prev.some(t=>t.title===taskTitle&&t.startDate===today_str))return prev;
+          return [...prev,{id:uid(),title:taskTitle,description:"Maak een foto van elke vaste tuinhoek.",category:"Fotojournaal",startDate:today_str,endDate:today_str,repeat:"",plantRef:"",plantLabel:"",gardenCategory:""}];
+        });
+      }
+    }
+    check();
+    const iv=setInterval(check,30000);
     return()=>clearInterval(iv);
-  },[showTimelapse,tlEntries.length]);
+  },[reminderEnabled,reminderTime,today_str]);
 
-  // Check which spots have a photo today
+  async function requestNotifPerm(){if(typeof Notification==="undefined"){setNotifPerm("denied");return;}const p=await Notification.requestPermission();setNotifPerm(p);}
+
+  const tlEntries=showTimelapse?journal.filter(e=>e.spotId===showTimelapse).sort((a,b)=>a.date.localeCompare(b.date)):[];
+  useEffect(()=>{if(!showTimelapse||tlEntries.length===0)return;const iv=setInterval(()=>setTlFrame(f=>(f+1)%tlEntries.length),800);return()=>clearInterval(iv);},[showTimelapse,tlEntries.length]);
   const todayPhotos=new Set(journal.filter(e=>e.date===today_str).map(e=>e.spotId));
 
+  function handleSpotPhoto(e,setter){const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>setter(ev.target.result);r.readAsDataURL(f);e.target.value="";}
+  function saveSpot(){if(!spotForm.naam.trim())return;setSpots(prev=>[...prev,{id:uid(),naam:spotForm.naam,beschrijving:spotForm.beschrijving,referencePhoto:spotForm.referencePhoto,created:today_str}]);setSpotForm({naam:"",beschrijving:"",referencePhoto:null});setShowAddSpot(false);}
+  function savePhoto(){if(!capturePhoto||!captureSpot)return;setJournal(prev=>[...prev,{id:uid(),spotId:captureSpot.id,date:today_str,photo:capturePhoto,time:new Date().toLocaleTimeString("nl",{hour:"2-digit",minute:"2-digit"})}]);setCapturePhoto(null);setCaptureSpot(null);setShowCapture(false);}
+  function deleteEntry(id){setJournal(prev=>prev.filter(e=>e.id!==id));}
+  function deleteSpot(id){setSpots(prev=>prev.filter(s=>s.id!==id));setJournal(prev=>prev.filter(e=>e.spotId!==id));}
+
+  const JGREEN="#2a6a20";
+
   return(<div>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-      <div>
-        <h2 style={{margin:0,fontSize:22,color:K.text}}>Fotojournaal</h2>
-        <p style={{margin:"4px 0 0",fontSize:13,color:K.muted}}>{spots.length} vaste hoek{spots.length!==1?"en":""} · {journal.length} foto's totaal</p>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+      <div style={{display:"inline-flex",background:"#fff",border:`1px solid ${K.border}`,borderRadius:10,padding:3,gap:3}}>
+        {[["logboek","📔 Logboek"],["fotos","📷 Fotodagboek"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setView(v)} style={{padding:"7px 16px",borderRadius:7,border:"none",cursor:"pointer",background:view===v?JGREEN:"transparent",color:view===v?"#fff":K.muted,fontSize:12,fontWeight:view===v?700:500,fontFamily:"inherit",transition:"all .15s"}}>{l}</button>
+        ))}
       </div>
-      <Button onClick={()=>setShowAddSpot(true)}><Icons.plus size={14}/>Nieuwe hoek</Button>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <button onClick={()=>setShowReminderSettings(true)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${reminderEnabled?JGREEN:K.border}`,background:reminderEnabled?"#e8f5e4":"#fff",color:reminderEnabled?JGREEN:K.muted,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+          ⏰ {reminderEnabled?`Herinnering ${reminderTime}`:"Herinnering instellen"}
+        </button>
+        {view==="logboek"&&<Button onClick={()=>setShowLogAdd(true)} style={{background:JGREEN}}><Icons.plus size={14}/>Notitie</Button>}
+        {view==="fotos"&&<Button onClick={()=>setShowAddSpot(true)} style={{background:JGREEN}}><Icons.plus size={14}/>Nieuwe hoek</Button>}
+      </div>
     </div>
 
-    {/* Daily reminder banner */}
-    {spots.length>0&&spots.some(s=>!todayPhotos.has(s.id))&&(
-      <Card style={{marginBottom:16,background:"#FFF8E8",borderLeft:`3px solid #C4703A`}}>
-        <div style={{fontSize:13,fontWeight:600,color:"#C4703A",marginBottom:4}}>📸 Dagelijkse foto herinnering</div>
-        <div style={{fontSize:12,color:K.muted}}>
-          {spots.filter(s=>!todayPhotos.has(s.id)).map(s=>s.naam).join(", ")} — nog geen foto vandaag.
-        </div>
-        <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
-          {spots.filter(s=>!todayPhotos.has(s.id)).map(s=>(
-            <button key={s.id} onClick={()=>{setCaptureSpot(s);setShowCapture(true);}}
-              style={{padding:"5px 12px",borderRadius:8,border:"none",background:"#C4703A",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>
-              📷 {s.naam}
-            </button>
+    {/* ══ LOGBOEK ══ */}
+    {view==="logboek"&&<>
+      <SearchBar value={logFilter} onChange={setLogFilter} placeholder="Zoek in logboek..."/>
+      {logboek.length===0&&<Card><EmptyState icon={<span style={{fontSize:32}}>📔</span>} title="Logboek is leeg" sub="Voeg dagelijkse notities toe over activiteiten, het weer en observaties in de tuin."/></Card>}
+      {Object.keys(logByMonth).sort((a,b)=>b.localeCompare(a)).map(ym=>(
+        <div key={ym}>
+          <div style={{fontSize:11,fontWeight:700,color:K.muted,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,marginTop:4}}>{maandLabel(ym)}</div>
+          {logByMonth[ym].map(e=>(
+            <Card key={e.id} onClick={()=>setLogSelected(e)} style={{cursor:"pointer",marginBottom:8,borderLeft:`3px solid ${JGREEN}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                    <span style={{fontSize:12,fontWeight:700,color:JGREEN}}>{e.datum}</span>
+                    {e.weer&&<span style={{fontSize:12}}>{e.weer}</span>}
+                    {(e.activiteiten||[]).slice(0,2).map(a=><span key={a} style={{fontSize:10,background:"#e8f5e4",color:JGREEN,borderRadius:5,padding:"1px 7px",fontWeight:600}}>{a}</span>)}
+                    {(e.activiteiten||[]).length>2&&<span style={{fontSize:10,color:K.muted}}>+{e.activiteiten.length-2}</span>}
+                  </div>
+                  {e.titel&&<div style={{fontSize:14,fontWeight:700,color:K.text,marginBottom:3}}>{e.titel}</div>}
+                  <div style={{fontSize:13,color:K.text,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.notitie}</div>
+                  {e.aantallen&&<div style={{fontSize:11,color:K.muted,marginTop:4,fontStyle:"italic"}}>🔢 {e.aantallen}</div>}
+                </div>
+                <button onClick={ev=>{ev.stopPropagation();delLog(e.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,color:K.danger,flexShrink:0}}><Icons.trash size={14}/></button>
+              </div>
+            </Card>
           ))}
         </div>
-      </Card>
-    )}
+      ))}
+      {/* Detail modal */}
+      <Modal open={!!logSelected} onClose={()=>setLogSelected(null)} title={logSelected?.titel||logSelected?.datum||""} wide>
+        {logSelected&&<div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
+            <span style={{fontSize:13,fontWeight:700,color:JGREEN}}>📅 {logSelected.datum}</span>
+            {logSelected.weer&&<span style={{fontSize:13}}>{logSelected.weer}</span>}
+          </div>
+          {(logSelected.activiteiten||[]).length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>{logSelected.activiteiten.map(a=><span key={a} style={{fontSize:11,background:"#e8f5e4",color:JGREEN,borderRadius:6,padding:"2px 9px",fontWeight:600}}>{a}</span>)}</div>}
+          <div style={{fontSize:14,color:K.text,lineHeight:1.6,marginBottom:10,whiteSpace:"pre-wrap"}}>{logSelected.notitie}</div>
+          {logSelected.aantallen&&<div style={{padding:"8px 12px",background:K.bL,borderRadius:8,fontSize:13,color:K.text}}><span style={{fontWeight:600}}>🔢 Aantallen/metingen:</span> {logSelected.aantallen}</div>}
+          <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}><Button variant="danger" onClick={()=>delLog(logSelected.id)}><Icons.trash size={14}/>Verwijderen</Button></div>
+        </div>}
+      </Modal>
+      {/* Add log modal */}
+      <Modal open={showLogAdd} onClose={()=>{setShowLogAdd(false);setLogForm({datum:today_str,titel:"",notitie:"",weer:"",activiteiten:[],aantallen:""}); }} title="Notitie toevoegen" wide>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Input label="Datum" type="date" value={logForm.datum} onChange={e=>setLogForm(p=>({...p,datum:e.target.value}))}/>
+          <div style={{marginBottom:12}}>
+            <label style={{display:"block",fontSize:12,fontWeight:600,color:K.muted,marginBottom:4,letterSpacing:.3,textTransform:"uppercase"}}>Weer</label>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{WEER.map(w=><button key={w} onClick={()=>setLogForm(p=>({...p,weer:p.weer===w?"":w}))} style={{padding:"4px 8px",borderRadius:6,border:`1.5px solid ${logForm.weer===w?JGREEN:K.border}`,background:logForm.weer===w?"#e8f5e4":"#fff",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{w}</button>)}</div>
+          </div>
+        </div>
+        <Input label="Titel (optioneel)" value={logForm.titel} onChange={e=>setLogForm(p=>({...p,titel:e.target.value}))} placeholder="Bijv. Eerste zaaisels buiten..."/>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"block",fontSize:12,fontWeight:600,color:K.muted,marginBottom:6,letterSpacing:.3,textTransform:"uppercase"}}>Activiteiten</label>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{ACTIVITEITEN_OPTS.map(a=><button key={a} onClick={()=>toggleAct(a)} style={{padding:"4px 10px",borderRadius:6,border:`1.5px solid ${logForm.activiteiten.includes(a)?JGREEN:K.border}`,background:logForm.activiteiten.includes(a)?"#e8f5e4":"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:logForm.activiteiten.includes(a)?700:400}}>{a}</button>)}</div>
+        </div>
+        <TextArea label="Notitie *" value={logForm.notitie} onChange={e=>setLogForm(p=>({...p,notitie:e.target.value}))} placeholder="Wat heb je gedaan? Wat viel op? Omstandigheden, observaties..."/>
+        <Input label="Aantallen / metingen (optioneel)" value={logForm.aantallen} onChange={e=>setLogForm(p=>({...p,aantallen:e.target.value}))} placeholder="Bijv. 24 zaailingen, T 14C, 8mm neerslag"/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+          <Button variant="secondary" onClick={()=>setShowLogAdd(false)}>Annuleren</Button>
+          <Button onClick={saveLog} disabled={!logForm.notitie.trim()&&!logForm.titel.trim()} style={{background:JGREEN}}><Icons.plus size={14}/>Opslaan</Button>
+        </div>
+      </Modal>
+    </>}
 
-    {spots.length===0&&<Card><EmptyState icon={<Icons.camera2 size={32} color={K.muted}/>} title="Nog geen vaste hoeken" sub="Maak een vaste hoek aan om dagelijks een foto te maken vanuit dezelfde positie."/></Card>}
-
-    {/* Spots grid */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
-      {spots.map(spot=>{
-        const entries=journal.filter(e=>e.spotId===spot.id).sort((a,b)=>b.date.localeCompare(a.date));
-        const hasToday=todayPhotos.has(spot.id);
-        const lastEntry=entries[0];
-        return(
-          <Card key={spot.id} style={{borderLeft:`3px solid ${hasToday?K.accent:"#E8DCC8"}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-              <div>
-                <div style={{fontSize:15,fontWeight:700,color:K.text}}>{spot.naam}</div>
-                {spot.beschrijving&&<div style={{fontSize:12,color:K.muted}}>{spot.beschrijving}</div>}
-                <div style={{fontSize:11,color:K.muted,marginTop:2}}>{entries.length} foto's</div>
-              </div>
-              <div style={{display:"flex",gap:4}}>
-                {entries.length>=2&&<button onClick={()=>startTimelapse(spot)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:10,cursor:"pointer",color:K.accent,fontWeight:700}}>▶ Timelaps</button>}
-                <button onClick={()=>deleteSpot(spot.id)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:10,cursor:"pointer",color:K.danger}}>✕</button>
-              </div>
-            </div>
-
-            {/* Latest photo */}
-            {lastEntry&&<div style={{width:"100%",height:160,borderRadius:8,overflow:"hidden",marginBottom:8,position:"relative"}}>
-              <img src={lastEntry.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              <div style={{position:"absolute",bottom:4,left:6,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:10,padding:"2px 6px",borderRadius:4}}>{lastEntry.date} {lastEntry.time}</div>
-              {hasToday&&<div style={{position:"absolute",top:6,right:6,background:K.accent,color:"#fff",fontSize:10,padding:"2px 8px",borderRadius:10,fontWeight:700}}>✓ Vandaag</div>}
-            </div>}
-
-            {/* Reference overlay button */}
-            {spot.referencePhoto&&!lastEntry&&<div style={{width:"100%",height:120,borderRadius:8,overflow:"hidden",marginBottom:8,position:"relative"}}>
-              <img src={spot.referencePhoto} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:.5}}/>
-              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#666",fontStyle:"italic"}}>Referentiefoto</div>
-            </div>}
-
-            <button onClick={()=>{setCaptureSpot(spot);setCapturePhoto(null);setShowCapture(true);}}
-              style={{width:"100%",padding:"8px",borderRadius:8,border:`2px dashed ${K.accent}`,background:K.accentLight,color:K.accent,fontSize:12,fontWeight:700,cursor:"pointer"}}>
-              📷 Foto maken
-            </button>
-
-            {/* Recent strip */}
-            {entries.length>1&&<div style={{display:"flex",gap:4,marginTop:8,overflowX:"auto"}}>
-              {entries.slice(0,8).map(e=>(
-                <div key={e.id} style={{position:"relative",flexShrink:0}}>
-                  <img src={e.photo} alt="" style={{width:44,height:44,objectFit:"cover",borderRadius:5,border:`1px solid ${K.border}`}}/>
-                  <button onClick={()=>deleteEntry(e.id)} style={{position:"absolute",top:-4,right:-4,width:14,height:14,borderRadius:"50%",background:K.danger,border:"none",color:"#fff",fontSize:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>✕</button>
+    {/* ══ FOTODAGBOEK ══ */}
+    {view==="fotos"&&<>
+      {reminderEnabled&&spots.length>0&&spots.some(s=>!todayPhotos.has(s.id))&&(
+        <Card style={{marginBottom:16,background:"#FFF8E8",borderLeft:"3px solid #C4703A"}}>
+          <div style={{fontSize:13,fontWeight:600,color:"#C4703A",marginBottom:4}}>📸 Nog geen foto vandaag</div>
+          <div style={{fontSize:12,color:K.muted,marginBottom:8}}>{spots.filter(s=>!todayPhotos.has(s.id)).map(s=>s.naam).join(", ")} — foto nog niet gemaakt.</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{spots.filter(s=>!todayPhotos.has(s.id)).map(s=><button key={s.id} onClick={()=>{setCaptureSpot(s);setShowCapture(true);}} style={{padding:"5px 12px",borderRadius:8,border:"none",background:"#C4703A",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>📷 {s.naam}</button>)}</div>
+        </Card>
+      )}
+      {spots.length===0&&<Card><EmptyState icon={<Icons.camera2 size={32} color={K.muted}/>} title="Nog geen vaste hoeken" sub="Voeg een vaste hoek toe en maak elke dag een foto vanuit dezelfde positie."/></Card>}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
+        {spots.map(spot=>{
+          const entries=journal.filter(e=>e.spotId===spot.id).sort((a,b)=>b.date.localeCompare(a.date));
+          const hasToday=todayPhotos.has(spot.id);
+          const lastEntry=entries[0];
+          return(
+            <Card key={spot.id} style={{borderLeft:`3px solid ${hasToday?JGREEN:"#E8DCC8"}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                <div><div style={{fontSize:15,fontWeight:700,color:K.text}}>{spot.naam}</div>{spot.beschrijving&&<div style={{fontSize:12,color:K.muted}}>{spot.beschrijving}</div>}<div style={{fontSize:11,color:K.muted,marginTop:2}}>{entries.length} foto's</div></div>
+                <div style={{display:"flex",gap:4}}>
+                  {entries.length>=2&&<button onClick={()=>{setShowTimelapse(spot.id);setTlFrame(0);}} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:10,cursor:"pointer",color:K.accent,fontWeight:700}}>▶ Timelaps</button>}
+                  <button onClick={()=>deleteSpot(spot.id)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${K.border}`,background:"#fff",fontSize:10,cursor:"pointer",color:K.danger}}>✕</button>
                 </div>
-              ))}
-            </div>}
-          </Card>
-        );
-      })}
-    </div>
-
-    {/* Capture modal */}
-    <Modal open={showCapture} onClose={()=>{setShowCapture(false);setCapturePhoto(null);}} title={`📷 ${captureSpot?.naam||""}`}>
-      {captureSpot?.referencePhoto&&<div style={{marginBottom:12}}>
-        <div style={{fontSize:11,fontWeight:600,color:K.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Referentie (maak foto vanuit dezelfde hoek)</div>
-        <img src={captureSpot.referencePhoto} alt="" style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:8,opacity:.7,border:`1px solid ${K.border}`}}/>
-      </div>}
-      <input ref={capRef} type="file" accept="image/*" capture="environment" onChange={e=>handleSpotPhoto(e,setCapturePhoto)} style={{display:"none"}}/>
-      {capturePhoto
-        ?<div style={{position:"relative",marginBottom:12}}>
-          <img src={capturePhoto} alt="" style={{width:"100%",maxHeight:220,objectFit:"cover",borderRadius:10}}/>
-          <button onClick={()=>setCapturePhoto(null)} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.5)",border:"none",borderRadius:"50%",width:26,height:26,color:"#fff",cursor:"pointer",fontSize:14}}>✕</button>
-        </div>
-        :<div onClick={()=>capRef.current?.click()} style={{width:"100%",height:140,borderRadius:10,border:`2px dashed ${K.accent}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",background:K.accentLight,marginBottom:12,gap:6}}>
-          <Icons.camera2 size={28} color={K.accent}/>
-          <span style={{fontSize:13,color:K.accent,fontWeight:600}}>Foto maken / uploaden</span>
-        </div>
-      }
-      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <Button variant="secondary" onClick={()=>{setShowCapture(false);setCapturePhoto(null);}}>Annuleren</Button>
-        <Button onClick={savePhoto} disabled={!capturePhoto}><Icons.plus size={14}/>Opslaan</Button>
+              </div>
+              {lastEntry&&<div style={{width:"100%",height:160,borderRadius:8,overflow:"hidden",marginBottom:8,position:"relative"}}>
+                <img src={lastEntry.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                <div style={{position:"absolute",bottom:4,left:6,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:10,padding:"2px 6px",borderRadius:4}}>{lastEntry.date} {lastEntry.time}</div>
+                {hasToday&&<div style={{position:"absolute",top:6,right:6,background:JGREEN,color:"#fff",fontSize:10,padding:"2px 8px",borderRadius:10,fontWeight:700}}>✓ Vandaag</div>}
+              </div>}
+              {spot.referencePhoto&&!lastEntry&&<div style={{width:"100%",height:120,borderRadius:8,overflow:"hidden",marginBottom:8,position:"relative"}}><img src={spot.referencePhoto} alt="" style={{width:"100%",height:"100%",objectFit:"cover",opacity:.5}}/><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#666",fontStyle:"italic"}}>Referentiefoto</div></div>}
+              <button onClick={()=>{setCaptureSpot(spot);setShowCapture(true);}} style={{width:"100%",padding:"8px 0",borderRadius:8,border:`2px solid ${hasToday?K.border:JGREEN}`,background:hasToday?"#fff":"#e8f5e4",color:hasToday?K.muted:JGREEN,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>📷 {hasToday?"Nieuwe foto":"Foto maken"}</button>
+              {entries.length>1&&<div style={{display:"flex",gap:4,marginTop:8,overflowX:"auto"}}>{entries.slice(0,8).map(e=><div key={e.id} style={{position:"relative",flexShrink:0}}><img src={e.photo} alt="" style={{width:44,height:44,objectFit:"cover",borderRadius:5,border:`1px solid ${K.border}`}}/><button onClick={()=>deleteEntry(e.id)} style={{position:"absolute",top:-4,right:-4,width:14,height:14,borderRadius:"50%",background:K.danger,border:"none",color:"#fff",fontSize:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>✕</button></div>)}</div>}
+            </Card>
+          );
+        })}
       </div>
+      <Modal open={showCapture} onClose={()=>{setShowCapture(false);setCapturePhoto(null);}} title={`📷 ${captureSpot?.naam||""}`}>
+        {captureSpot?.referencePhoto&&<div style={{marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:K.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Referentie — maak foto vanuit dezelfde hoek</div><img src={captureSpot.referencePhoto} alt="" style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:8,opacity:.7,border:`1px solid ${K.border}`}}/></div>}
+        <input ref={capRef} type="file" accept="image/*" capture="environment" onChange={e=>handleSpotPhoto(e,setCapturePhoto)} style={{display:"none"}}/>
+        {capturePhoto?<div style={{position:"relative",marginBottom:12}}><img src={capturePhoto} alt="" style={{width:"100%",maxHeight:220,objectFit:"cover",borderRadius:10}}/><button onClick={()=>setCapturePhoto(null)} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.5)",border:"none",borderRadius:"50%",width:26,height:26,color:"#fff",cursor:"pointer",fontSize:14}}>✕</button></div>:<div onClick={()=>capRef.current?.click()} style={{width:"100%",height:140,borderRadius:10,border:`2px dashed ${JGREEN}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",background:"#e8f5e4",marginBottom:12,gap:6}}><Icons.camera2 size={28} color={JGREEN}/><span style={{fontSize:13,color:JGREEN,fontWeight:600}}>Foto maken / uploaden</span></div>}
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Button variant="secondary" onClick={()=>{setShowCapture(false);setCapturePhoto(null);}}>Annuleren</Button><Button onClick={savePhoto} disabled={!capturePhoto} style={{background:JGREEN}}><Icons.plus size={14}/>Opslaan</Button></div>
+      </Modal>
+      <Modal open={showAddSpot} onClose={()=>setShowAddSpot(false)} title="Nieuwe vaste hoek">
+        <Input label="Naam van de hoek" value={spotForm.naam} onChange={e=>setSpotForm(p=>({...p,naam:e.target.value}))} placeholder="Bijv. Voortuin links, Perenboom, Perk A..."/>
+        <TextArea label="Beschrijving (optioneel)" value={spotForm.beschrijving} onChange={e=>setSpotForm(p=>({...p,beschrijving:e.target.value}))} placeholder="Bijv. Vanuit het tuinhek richting het huis"/>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"block",fontSize:12,fontWeight:600,color:K.muted,marginBottom:4,letterSpacing:.3,textTransform:"uppercase"}}>Referentiefoto (optioneel)</label>
+          <input ref={frRef} type="file" accept="image/*" capture="environment" onChange={e=>handleSpotPhoto(e,v=>setSpotForm(p=>({...p,referencePhoto:v})))} style={{display:"none"}}/>
+          {spotForm.referencePhoto?<div style={{position:"relative"}}><img src={spotForm.referencePhoto} alt="" style={{width:"100%",height:120,objectFit:"cover",borderRadius:8}}/><button onClick={()=>setSpotForm(p=>({...p,referencePhoto:null}))} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,.5)",border:"none",borderRadius:"50%",width:22,height:22,color:"#fff",cursor:"pointer",fontSize:12}}>✕</button></div>:<div onClick={()=>frRef.current?.click()} style={{width:"100%",height:80,borderRadius:8,border:`2px dashed ${K.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",background:K.bL,fontSize:12,color:K.muted,gap:6}}><Icons.camera size={16}/> Referentiefoto uploaden</div>}
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Button variant="secondary" onClick={()=>setShowAddSpot(false)}>Annuleren</Button><Button onClick={saveSpot} disabled={!spotForm.naam.trim()} style={{background:JGREEN}}><Icons.plus size={14}/>Aanmaken</Button></div>
+      </Modal>
+      {showTimelapse&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.9)",zIndex:3000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowTimelapse(null)}><div onClick={e=>e.stopPropagation()} style={{maxWidth:600,width:"95%"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{color:"#fff",fontWeight:700,fontSize:16}}>{spots.find(s=>s.id===showTimelapse)?.naam} — Timelaps</div><button onClick={()=>setShowTimelapse(null)} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"#fff",cursor:"pointer",fontSize:18}}>✕</button></div>{tlEntries[tlFrame]&&<><img src={tlEntries[tlFrame].photo} alt="" style={{width:"100%",borderRadius:10,maxHeight:"60vh",objectFit:"contain"}}/><div style={{color:"rgba(255,255,255,.7)",textAlign:"center",marginTop:8,fontSize:13}}>{tlEntries[tlFrame].date} {tlEntries[tlFrame].time} — {tlFrame+1}/{tlEntries.length}</div><div style={{display:"flex",gap:3,marginTop:8,justifyContent:"center",flexWrap:"wrap"}}>{tlEntries.map((_,i)=><div key={i} onClick={()=>setTlFrame(i)} style={{width:8,height:8,borderRadius:"50%",background:i===tlFrame?"#fff":"rgba(255,255,255,.3)",cursor:"pointer"}}/>)}</div></>}</div></div>}
+    </>}
+
+    {/* ══ HERINNERING INSTELLINGEN ══ */}
+    <Modal open={showReminderSettings} onClose={()=>setShowReminderSettings(false)} title="Dagelijkse herinnering instellen">
+      <div style={{marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+          <span style={{fontSize:14,fontWeight:600,color:K.text}}>Herinnering inschakelen</span>
+          <button onClick={()=>setReminderEnabled(p=>!p)} style={{width:48,height:26,borderRadius:13,border:"none",cursor:"pointer",background:reminderEnabled?JGREEN:"#ccc",position:"relative",transition:"background .2s",padding:0}}>
+            <div style={{width:22,height:22,borderRadius:11,background:"#fff",position:"absolute",top:2,left:reminderEnabled?24:2,transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
+          </button>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:12,fontWeight:600,color:K.muted,marginBottom:6,letterSpacing:.3,textTransform:"uppercase"}}>Tijdstip van herinnering</label>
+          <input type="time" value={reminderTime} onChange={e=>setReminderTime(e.target.value)} style={{padding:"9px 14px",border:`2px solid ${K.border}`,borderRadius:8,fontSize:16,fontFamily:"inherit",background:"#fff",width:"100%",boxSizing:"border-box"}}/>
+        </div>
+        <div style={{padding:"12px 14px",background:K.bL,borderRadius:8,marginBottom:10}}>
+          <div style={{fontSize:13,fontWeight:600,color:K.text,marginBottom:6}}>Browser meldingen</div>
+          {notifPerm==="granted"?<div style={{fontSize:12,color:JGREEN,fontWeight:600}}>✓ Meldingen zijn ingeschakeld</div>:notifPerm==="denied"?<div style={{fontSize:12,color:K.muted}}>Meldingen zijn geblokkeerd. Schakel ze in via browserinstellingen.</div>:<div><div style={{fontSize:12,color:K.muted,marginBottom:8}}>Sta browser meldingen toe voor een pop-up op het ingestelde tijdstip.</div><button onClick={requestNotifPerm} style={{padding:"6px 14px",borderRadius:7,border:"none",background:JGREEN,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Sta meldingen toe</button></div>}
+        </div>
+        <div style={{fontSize:12,color:K.muted,background:"#fffbf0",borderRadius:8,padding:"10px 12px"}}>
+          Als de herinnering actief is, wordt elke dag op het ingestelde tijdstip een taak aangemaakt: <strong>Dagelijkse tuinfoto maken</strong>
+        </div>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end"}}><Button onClick={()=>setShowReminderSettings(false)} style={{background:JGREEN}}>Opslaan</Button></div>
     </Modal>
-
-    {/* Add spot modal */}
-    <Modal open={showAddSpot} onClose={()=>setShowAddSpot(false)} title="Nieuwe vaste hoek">
-      <Input label="Naam van de hoek" value={spotForm.naam} onChange={e=>setSpotForm(p=>({...p,naam:e.target.value}))} placeholder="Bijv. Voortuin links, Perenboom, Perk A..."/>
-      <TextArea label="Beschrijving (optioneel)" value={spotForm.beschrijving} onChange={e=>setSpotForm(p=>({...p,beschrijving:e.target.value}))} placeholder="Bijv. Vanuit het tuinhek richting het huis"/>
-      <div style={{marginBottom:12}}>
-        <label style={{display:"block",fontSize:12,fontWeight:600,color:K.muted,marginBottom:4,letterSpacing:.3,textTransform:"uppercase"}}>Referentiefoto (optioneel)</label>
-        <input ref={frRef} type="file" accept="image/*" capture="environment" onChange={e=>handleSpotPhoto(e,v=>setSpotForm(p=>({...p,referencePhoto:v})))} style={{display:"none"}}/>
-        {spotForm.referencePhoto
-          ?<div style={{position:"relative"}}>
-            <img src={spotForm.referencePhoto} alt="" style={{width:"100%",height:120,objectFit:"cover",borderRadius:8}}/>
-            <button onClick={()=>setSpotForm(p=>({...p,referencePhoto:null}))} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,.5)",border:"none",borderRadius:"50%",width:22,height:22,color:"#fff",cursor:"pointer",fontSize:12}}>✕</button>
-          </div>
-          :<div onClick={()=>frRef.current?.click()} style={{width:"100%",height:80,borderRadius:8,border:`2px dashed ${K.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",background:K.bL,fontSize:12,color:K.muted,gap:6}}>
-            <Icons.camera size={16}/> Referentiefoto uploaden
-          </div>
-        }
-      </div>
-      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <Button variant="secondary" onClick={()=>setShowAddSpot(false)}>Annuleren</Button>
-        <Button onClick={saveSpot} disabled={!spotForm.naam.trim()}><Icons.plus size={14}/>Aanmaken</Button>
-      </div>
-    </Modal>
-
-    {/* Timelapse viewer */}
-    {showTimelapse&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.9)",zIndex:3000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowTimelapse(null)}>
-      <div onClick={e=>e.stopPropagation()} style={{maxWidth:600,width:"95%"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{color:"#fff",fontWeight:700,fontSize:16}}>{spots.find(s=>s.id===showTimelapse)?.naam} — Timelaps</div>
-          <button onClick={()=>setShowTimelapse(null)} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"#fff",cursor:"pointer",fontSize:18}}>✕</button>
-        </div>
-        {tlEntries[tlFrame]&&<>
-          <img src={tlEntries[tlFrame].photo} alt="" style={{width:"100%",borderRadius:10,maxHeight:"60vh",objectFit:"contain"}}/>
-          <div style={{color:"rgba(255,255,255,.7)",textAlign:"center",marginTop:8,fontSize:13}}>{tlEntries[tlFrame].date} {tlEntries[tlFrame].time} — {tlFrame+1}/{tlEntries.length}</div>
-          <div style={{display:"flex",gap:3,marginTop:8,justifyContent:"center",flexWrap:"wrap"}}>
-            {tlEntries.map((_,i)=>(
-              <div key={i} onClick={()=>setTlFrame(i)} style={{width:8,height:8,borderRadius:"50%",background:i===tlFrame?"#fff":"rgba(255,255,255,.3)",cursor:"pointer"}}/>
-            ))}
-          </div>
-        </>}
-      </div>
-    </div>}
   </div>);
 }
 
@@ -4767,6 +5057,7 @@ function CottageGardenApp(){
   const [moodboard,setMoodboard]=useState(()=>lsGet("tr_moodboard",[]));
   const [gardenMap,setGardenMap]=useState(()=>lsGet("tr_gardenmap",{outline:[],outlineClosed:false,phase:"draw",cells:{},pins:[],cols:20,rows:16,gardenSized:false,gardenBreedte:null,gardenHoogte:null}));
   const [journal,setJournal]=useState(()=>lsGet("tr_journal",[]));
+  const [logboek,setLogboek]=useState(()=>lsGet("tr_logboek",[]));
   const [begroting,setBegroting]=useState(()=>lsGet("tr_begroting",[]));
   const [budget,setBudget]=useState(()=>lsGet("tr_budget",[]));
 
@@ -4783,6 +5074,7 @@ function CottageGardenApp(){
   useEffect(()=>{lsSet("tr_moodboard",moodboard);},[moodboard]);
   useEffect(()=>{lsSet("tr_gardenmap",gardenMap);},[gardenMap]);
   useEffect(()=>{lsSet("tr_journal",journal);},[journal]);
+  useEffect(()=>{lsSet("tr_logboek",logboek);},[logboek]);
   useEffect(()=>{lsSet("tr_begroting",begroting);},[begroting]);
   useEffect(()=>{lsSet("tr_budget",budget);},[budget]);
 
@@ -5021,9 +5313,6 @@ function CottageGardenApp(){
         <button onclick="document.getElementById('tr-save-modal').remove()" style="width:100%;padding:10px;background:#fff;color:#666;border:1px solid #ddd;border-radius:10px;font-family:-apple-system,sans-serif;font-size:14px;cursor:pointer;margin-top:8px;">
           ← Terug naar TuinRegister
         </button>
-        <button onclick="trLogout()" style="width:100%;padding:10px;background:#fff;color:#c0392b;border:1px solid #e0c0bb;border-radius:10px;font-family:-apple-system,sans-serif;font-size:14px;cursor:pointer;margin-top:6px;">
-          🚪 Uitloggen & terug naar website
-        </button>
         <p style="text-align:center;font-size:10px;color:#bbb;margin-top:12px;">⚠️ Je bent zelf verantwoordelijk voor het bewaren van je backups.</p>
       </div>
     `;
@@ -5041,11 +5330,11 @@ function CottageGardenApp(){
             <button onClick={startTour} title="Rondleiding starten" style={{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.25)",borderRadius:10,cursor:"pointer",padding:"8px 12px",display:"flex",alignItems:"center",gap:6,color:"#F3EBDD",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:600,backdropFilter:"blur(4px)"}}>
               <span style={{fontSize:14}}>❓</span>Rondleiding
             </button>
-            <button onClick={()=>trLogout()} title="Uitloggen" style={{background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.2)",borderRadius:10,cursor:"pointer",padding:"8px 12px",display:"flex",alignItems:"center",gap:6,color:"#F3EBDD",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:600,backdropFilter:"blur(4px)"}}>
-              <span style={{fontSize:14}}>🚪</span>Uitloggen
-            </button>
             <button onClick={()=>openSaveModal()} style={{background:"linear-gradient(135deg,#1F3A2A,#0F1F15)",border:"none",borderRadius:10,cursor:"pointer",padding:"8px 14px",display:"flex",alignItems:"center",gap:6,color:"#F3EBDD",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:700,boxShadow:"0 2px 8px rgba(31,58,42,.3)"}}>
               <span style={{fontSize:14}}>💾</span>Opslaan & Afsluiten
+            </button>
+            <button onClick={()=>trLogout()} title="Uitloggen" style={{background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.25)",borderRadius:10,cursor:"pointer",padding:"8px 12px",display:"flex",alignItems:"center",gap:6,color:"#F3EBDD",fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",fontWeight:600}}>
+              <span style={{fontSize:14}}>🚪</span>Uitloggen
             </button>
           </div>
         </div>
@@ -5065,7 +5354,7 @@ function CottageGardenApp(){
         {tab===4&&<InventarisTab plants={plants} setPlants={setPlants} bulbs={bulbs} setBulbs={setBulbs} trees={trees} setTrees={setTrees} pondPlants={pondPlants} setPondPlants={setPondPlants} veggies={veggies} setVeggies={setVeggies} seeds={seeds} setSeeds={setSeeds} tasks={tasks} setTasks={setTasks} gardenMap={gardenMap} setGardenMap={setGardenMap} onNavigatePlattegrond={()=>setTab(1)}/>}
         {tab===5&&<BloeikalenderTab plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies} gardenMap={gardenMap}/>}
         {tab===6&&<TaskManager tasks={tasks} setTasks={setTasks} completions={completions} setCompletions={setCompletions} plants={plants} bulbs={bulbs} trees={trees} pondPlants={pondPlants} veggies={veggies}/>}
-        {tab===7&&<FotojournaalTab journal={journal} setJournal={setJournal}/>}
+        {tab===7&&<FotojournaalTab journal={journal} setJournal={setJournal} logboek={logboek} setLogboek={setLogboek} tasks={tasks} setTasks={setTasks}/>}
       </div>
 
       {/* Tour Overlay */}
